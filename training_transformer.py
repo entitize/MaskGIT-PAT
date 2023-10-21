@@ -96,7 +96,7 @@ class TrainTransformer:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="VQGAN")
-    parser.add_argument('--run-name', type=str, default=None)
+    parser.add_argument('--run-name', type=str)
     parser.add_argument('--latent-dim', type=int, default=32, help='Latent dimension n_z.')
     parser.add_argument('--image-size', type=int, default=256, help='Image height and width.)')
     parser.add_argument('--num-codebook-vectors', type=int, default=8192, help='Number of codebook vectors.')
@@ -120,9 +120,9 @@ if __name__ == '__main__':
     parser.add_argument('--num-image-tokens', type=int, default=256, help='Number of image tokens.')
 
     args = parser.parse_args()
-    args.run_name = "<name>"
-    args.dataset_path = r"C:\Users\dome\datasets\landscape"
-    args.checkpoint_path = r".\checkpoints"
+    # args.run_name = "<name>"
+    # args.dataset_path = r"C:\Users\dome\datasets\landscape"
+    # args.checkpoint_path = r".\checkpoints"
     args.n_layers = 24
     args.dim = 768
     args.hidden_dim = 3072

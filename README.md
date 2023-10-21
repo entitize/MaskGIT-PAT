@@ -2,6 +2,9 @@
 
 Commands to run to setup HPC
 ```
+cd ~
+git clone https://github.com/entitize/MaskGIT-PAT/
+
 mkdir -p ~/miniconda3
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
 bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
@@ -14,6 +17,7 @@ conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvi
 pip install numpy
 pip install albumentations
 pip install matplotlib
+pip install tensorboard
 ```
 
 To run baseline
@@ -24,7 +28,13 @@ sbatch baseline_landscape_job.sh
 
 To monitor in realtime
 ```
+cd jobs
 tail -f LOGFILE.out
+```
+
+Tensorboard monitoring
+```
+tensorboard --logdir=.
 ```
 
 Pytorch implementation of MaskGIT: Masked Generative Image Transformer (https://arxiv.org/pdf/2202.04200.pdf)

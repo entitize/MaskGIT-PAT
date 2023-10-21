@@ -9,7 +9,9 @@ from discriminator import Discriminator
 from lpips import LPIPS
 from utils import load_data, weights_init
 from vqgan import VQGAN
-
+import datetime
+import json
+from torch.utils.tensorboard import SummaryWriter
 
 class TrainVQGAN:
     def __init__(self, args):
@@ -18,15 +20,26 @@ class TrainVQGAN:
         self.discriminator.apply(weights_init)
         self.perceptual_loss = LPIPS().eval().to(device=args.device)
         self.opt_vq, self.opt_disc = self.configure_optimizers(args)
+        self.save_img_rate = args.save_img_rate
+
+        self.logger = SummaryWriter(f"./runs/{args.experiment_name}")
 
         self.prepare_training()
 
         self.train(args)
 
-    @staticmethod
-    def prepare_training():
+    def prepare_training(self):
         os.makedirs("results", exist_ok=True)
         os.makedirs("checkpoints", exist_ok=True)
+        os.makedirs("configs", exist_ok=True)
+
+        os.makedirs(os.path.join("results", args.experiment_name), exist_ok=True)
+        os.makedirs(os.path.join("checkpoints", args.experiment_name), exist_ok=True)
+        with open(os.path.join("configs", args.experiment_name + ".json"), "w") as f:
+            args_dict = vars(args)
+            args_dict["time"] = str(datetime.datetime.now())
+            json.dump(args_dict, f, indent=4)
+
 
     def configure_optimizers(self, args):
         lr = args.learning_rate
@@ -76,15 +89,19 @@ class TrainVQGAN:
                     self.opt_vq.step()
                     self.opt_disc.step()
 
-                    if i % 10 == 0:
+                    if i % self.save_img_rate == 0:
                         with torch.no_grad():
                             both = torch.cat((imgs[:4], decoded_images.add(1).mul(0.5)[:4]))
-                            vutils.save_image(both, os.path.join("results", f"{epoch}_{i}.jpg"), nrow=4)
+                            vutils.save_image(both, os.path.join("results", args.experiment_name, f"{epoch}_{i}.jpg"), nrow=4)
 
                     pbar.set_postfix(VQ_Loss=np.round(loss_vq.cpu().detach().numpy().item(), 5),
                                      GAN_Loss=np.round(loss_gan.cpu().detach().numpy().item(), 3))
                     pbar.update(0)
-                torch.save(self.vqgan.state_dict(), os.path.join("checkpoints", f"vqgan_epoch_{epoch}.pt"))
+
+                    self.logger.add_scalar("VQ Loss", np.round(loss_vq.cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                    self.logger.add_scalar("GAN Loss", np.round(loss_gan.cpu().detach().numpy().item(), 3), (epoch * steps_one_epoch) + i)
+
+                torch.save(self.vqgan.state_dict(), os.path.join("checkpoints", args.experiment_name, f"vqgan_epoch_{epoch}.pt"))
 
 
 if __name__ == '__main__':
@@ -106,7 +123,15 @@ if __name__ == '__main__':
     parser.add_argument('--l2-loss-factor', type=float, default=1., help='Weighting factor for reconstruction loss.')
     parser.add_argument('--perceptual-loss-factor', type=float, default=1., help='Weighting factor for perceptual loss.')
 
+    parser.add_argument('--save-img-rate', type=int, default=1000, help='How often to save images (default: 1000). In units of steps')
+
+    parser.add_argument('--experiment-name', type=str, help='Name of experiment. This will be used to create a folder in results/ and checkpoints/')
+
     args = parser.parse_args()
+
+    assert not os.path.exists(os.path.join("results", args.experiment_name)), "Experiment name already exists. Please choose another name."
+
+    print("Running experiment: ", args.experiment_name)
 
     train_vqgan = TrainVQGAN(args)
 
