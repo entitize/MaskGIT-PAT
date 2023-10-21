@@ -20,4 +20,4 @@ cd ~/MaskGIT-pytorch
 
 # NOTE(@kai): the training_vqgan script already uses cuda by default
 
-python training_vqgan.py --dataset-path /groups/mlprojects/pat/landscape/ --batch-size 6
+python training_vqgan.py --dataset-path /groups/mlprojects/pat/landscape/ --batch-size 4
