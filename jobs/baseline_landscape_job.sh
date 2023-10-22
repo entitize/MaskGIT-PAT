@@ -12,6 +12,7 @@
 
 # LOAD MODULES, INSERT CODE, AND RUN YOUR PROGRAMS HERE
 
+# Needed to load miniconda
 source ~/.bashrc
 
 module load cuda/11.8
@@ -20,4 +21,8 @@ cd ~/MaskGIT-PAT
 
 # NOTE(@kai): the training_vqgan script already uses cuda by default
 
-python training_vqgan.py --dataset-path /groups/mlprojects/pat/landscape/ --batch-size 4 --experiment-name baseline314
+python training_vqgan.py \
+    --dataset-path /groups/mlprojects/pat/landscape/ \
+    --batch-size 4 \
+    --experiment-name baseline314 \
+    --save-img-rate 1000

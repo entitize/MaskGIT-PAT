@@ -1,6 +1,9 @@
-# MaskGIT-pytorch
+# MaskGIT-PAT
 
-Commands to run to setup HPC
+We apply MaskGIT to photoacoustic tomography (PAT) to resolve spatial-aliasing and limited view
+The code in this repo is based on [MaskGIT-pytorch](https://github.com/dome272/MaskGIT-pytorch)
+
+Commands to run to setup on Caltech HPC
 ```
 cd ~
 git clone https://github.com/entitize/MaskGIT-PAT/
@@ -20,6 +23,23 @@ pip install matplotlib
 pip install tensorboard
 ```
 
+In order to potentially prevent running space on home directory on HPC, create symlinks to `/groups/mlprojects/pat/`
+```
+cd /groups/mlprojects/pat/
+mkdir YOUR_NAME
+mkdir YOUR_NAME/checkpoints
+mkdir YOUR_NAME/runs
+mkdir YOUR_NAME/configs
+mkdir YOUR_NAME/results
+
+cd ~/MaskGIT-PAT
+
+ln -s /groups/mlprojects/pat/YOUR_NAME/checkpoints checkpoints
+ln -s /groups/mlprojects/pat/YOUR_NAME/runs runs
+ln -s /groups/mlprojects/pat/YOUR_NAME/configs configs
+ln -s /groups/mlprojects/pat/YOUR_NAME/results results
+```
+
 To run baseline
 ```
 cd jobs
@@ -36,6 +56,10 @@ Tensorboard monitoring
 ```
 tensorboard --logdir=.
 ```
+
+___
+
+# MaskGIT-Pytorch
 
 Pytorch implementation of MaskGIT: Masked Generative Image Transformer (https://arxiv.org/pdf/2202.04200.pdf)
 <p align="center">

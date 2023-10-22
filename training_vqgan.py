@@ -20,7 +20,6 @@ class TrainVQGAN:
         self.discriminator.apply(weights_init)
         self.perceptual_loss = LPIPS().eval().to(device=args.device)
         self.opt_vq, self.opt_disc = self.configure_optimizers(args)
-        self.save_img_rate = args.save_img_rate
 
         self.logger = SummaryWriter(f"./runs/{args.experiment_name}")
 
@@ -89,10 +88,14 @@ class TrainVQGAN:
                     self.opt_vq.step()
                     self.opt_disc.step()
 
-                    if i % self.save_img_rate == 0:
+                    if i % args.save_img_rate == 0:
                         with torch.no_grad():
                             both = torch.cat((imgs[:4], decoded_images.add(1).mul(0.5)[:4]))
                             vutils.save_image(both, os.path.join("results", args.experiment_name, f"{epoch}_{i}.jpg"), nrow=4)
+
+                            # save image to tensorboard
+                            grid = vutils.make_grid(both, nrow=4, normalize=True)
+                            self.logger.add_image(f"train_images_{i}", grid, (epoch * steps_one_epoch) + i)
 
                     pbar.set_postfix(VQ_Loss=np.round(loss_vq.cpu().detach().numpy().item(), 5),
                                      GAN_Loss=np.round(loss_gan.cpu().detach().numpy().item(), 3))
@@ -129,7 +132,14 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    assert not os.path.exists(os.path.join("results", args.experiment_name)), "Experiment name already exists. Please choose another name."
+    # User should specify unique experiment name
+    i = 1
+    original_experiment_name = args.experiment_name
+    while os.path.exists(os.path.join("checkpoints", args.experiment_name)):
+        args.experiment_name = original_experiment_name + "_" + str(i)
+        i += 1
+    if i > 1:
+        print("Experiment name already exists. Changing experiment name to: ", args.experiment_name)
 
     print("Running experiment: ", args.experiment_name)
 
