@@ -4,3 +4,4 @@ __pycache__
 vgg_lpips
 slurm*
 runs
+configs
