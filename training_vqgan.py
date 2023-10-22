@@ -94,7 +94,7 @@ class TrainVQGAN:
                             vutils.save_image(both, os.path.join("results", args.experiment_name, f"{epoch}_{i}.jpg"), nrow=4)
 
                             # save image to tensorboard
-                            grid = vutils.make_grid(both, nrow=4, normalize=True)
+                            grid = vutils.make_grid(both, nrow=4)
                             self.logger.add_image(f"train_images_{i}", grid, (epoch * steps_one_epoch) + i)
 
                     pbar.set_postfix(VQ_Loss=np.round(loss_vq.cpu().detach().numpy().item(), 5),
