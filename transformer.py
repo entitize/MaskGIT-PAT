@@ -129,7 +129,7 @@ class VQGANTransformer(nn.Module):
 
     @torch.no_grad()
     def sample_good(self, inputs=None, num=1, T=11, mode="cosine"):
-        # self.transformer.eval()
+        self.transformer.eval()
         N = self.num_image_tokens
         if inputs is None:
             inputs = self.create_input_tokens_normal(num)
@@ -168,7 +168,7 @@ class VQGANTransformer(nn.Module):
             cur_ids = torch.where(masking, self.mask_token_id, sampled_ids)
             # print((cur_ids == 8192).count_nonzero())
 
-        # self.transformer.train()
+        self.transformer.train()
         return cur_ids[:, 1:]
 
     @torch.no_grad()

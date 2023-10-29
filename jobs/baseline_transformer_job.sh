@@ -3,12 +3,12 @@
 #Submit this script with: sbatch thefilename
 #SBATCH -A mlprojects
 
-#SBATCH --time=00:60:00   # walltime, timeout (if script runs longer than specified, it will timeout). Setting it higher results in lower priority on HPC
+#SBATCH --time=3-00:00:00   # walltime, timeout (if script runs longer than specified, it will timeout). Setting it higher results in lower priority on HPC
 #SBATCH --ntasks=1   # number of processor cores (i.e. tasks)
 #SBATCH --nodes=1   # number of nodes
 #SBATCH --gres=gpu:1 # number of GPUs
 #SBATCH --mem-per-cpu=5G # memory per CPU core
-#SBATCH -J "v2_transformer_baseline"   # job name
+#SBATCH -J "three_day_transformer_landscape"   # job name
 
 # LOAD MODULES, INSERT CODE, AND RUN YOUR PROGRAMS HERE
 
@@ -24,7 +24,7 @@ cd ~/MaskGIT-PAT
 # CUDA_LAUNCH_BLOCKING=1
 
 python training_transformer.py \
-    --run-name v2_transformer_baseline \
+    --run-name three_day_transformer_landscape \
     --dataset-path /groups/mlprojects/pat/landscape/ \
     --checkpoint-path ./checkpoints/baseline_landscape_3days/vqgan_epoch_240.pt \
     --batch-size 1 \
