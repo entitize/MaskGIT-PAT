@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torchvision import utils as vutils
+from torchvision import transforms
 from discriminator import Discriminator
 from lpips import LPIPS
 from utils import load_data, weights_init
@@ -58,7 +59,11 @@ class TrainVQGAN:
         for epoch in range(args.epochs):
             with tqdm(range(len(train_dataset))) as pbar:
                 for i, imgs in zip(pbar, train_dataset):
-                    imgs = imgs.to(device=args.device)
+                    if args.image_channels == 1:
+                        imgs = transforms.Grayscale()(imgs).to(device=args.device)
+                    else:
+                        imgs = imgs.to(device=args.device)
+
                     decoded_images, _, q_loss = self.vqgan(imgs)
 
                     disc_real = self.discriminator(imgs)
@@ -103,7 +108,6 @@ class TrainVQGAN:
 
                     self.logger.add_scalar("VQ Loss", np.round(loss_vq.cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
                     self.logger.add_scalar("GAN Loss", np.round(loss_gan.cpu().detach().numpy().item(), 3), (epoch * steps_one_epoch) + i)
-
                 torch.save(self.vqgan.state_dict(), os.path.join("checkpoints", args.experiment_name, f"vqgan_epoch_{epoch}.pt"))
 
 
@@ -144,5 +148,3 @@ if __name__ == '__main__':
     print("Running experiment: ", args.experiment_name)
 
     train_vqgan = TrainVQGAN(args)
-
-
