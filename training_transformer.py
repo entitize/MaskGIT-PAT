@@ -57,13 +57,13 @@ class TrainTransformer:
                     self.logger.add_scalar("Cross Entropy Loss", np.round(loss.cpu().detach().numpy().item(), 4), (epoch * len_train_dataset) + i)
             try:
                 log, sampled_imgs = self.model.log_images(imgs[0:1])
-                vutils.save_image(sampled_imgs.add(1).mul(0.5), os.path.join("results", f"{epoch}.jpg"), nrow=4)
+                vutils.save_image(sampled_imgs.add(1).mul(0.5), os.path.join("results", args.run_name, f"{epoch}.jpg"), nrow=4)
                 plot_images(log)
-            except:
-                pass
+            except Exception as e:
+                print("Could not plot images", e)
             if epoch % args.ckpt_interval == 0:
-                torch.save(self.model.state_dict(), os.path.join("checkpoints", f"transformer_epoch_{epoch}.pt"))
-            torch.save(self.model.state_dict(), os.path.join("checkpoints", "transformer_current.pt"))
+                torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, f"transformer_epoch_{epoch}.pt"))
+            torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, "transformer_current.pt"))
 
     def configure_optimizers(self):
         # decay, no_decay = set(), set()
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar.')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images.')
     parser.add_argument('--dataset-path', type=str, default='./data', help='Path to data.')
-    parser.add_argument('--checkpoint-path', type=str, default='./checkpoints/last_ckpt.pt', help='Path to checkpoint.')
+    parser.add_argument('--checkpoint-path', type=str, default=None, help='Path to checkpoint.')
     parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on.')
     parser.add_argument('--batch-size', type=int, default=10, help='Batch size for training.')
     parser.add_argument('--accum-grad', type=int, default=10, help='Number for gradient accumulation.')
@@ -111,6 +111,8 @@ if __name__ == '__main__':
     parser.add_argument('--start-from-epoch', type=int, default=1, help='Number of epochs to train.')
     parser.add_argument('--ckpt-interval', type=int, default=100, help='Number of epochs to train.')
     parser.add_argument('--learning-rate', type=float, default=1e-4, help='Learning rate.')
+
+    parser.add_argument('--ckpt-interval', type=int, default=100, help='Interval to save checkpoints')
 
     parser.add_argument('--sos-token', type=int, default=1025, help='Start of Sentence token.')
 
@@ -120,20 +122,36 @@ if __name__ == '__main__':
     parser.add_argument('--num-image-tokens', type=int, default=256, help='Number of image tokens.')
 
     args = parser.parse_args()
+
+    # make sure run-name is unique by looking at results dir
+    i = 1
+    original_run_name = args.run_name
+    while os.path.exists(os.path.join("checkpoints", args.run_name)):
+        args.run_name = original_run_name + "_" + str(i)
+        i += 1
+    if i > 1:
+        print("Experiment name already exists. Changing experiment name to: ", args.run_name)
+
+    print("Running experiment: ", args.run_name)
+
+    os.makedirs(os.path.join("checkpoints", args.run_name), exist_ok=True)
+    os.makedirs(os.path.join("results", args.run_name), exist_ok=True)
+
+
     # args.run_name = "<name>"
     # args.dataset_path = r"C:\Users\dome\datasets\landscape"
     # args.checkpoint_path = r".\checkpoints"
-    args.n_layers = 24
-    args.dim = 768
-    args.hidden_dim = 3072
-    args.batch_size = 4
-    args.accum_grad = 25
-    args.epochs = 1000
+    # args.n_layers = 24
+    # args.dim = 768
+    # args.hidden_dim = 3072
+    # args.batch_size = 4
+    # args.accum_grad = 25
+    # args.epochs = 1000
 
-    args.start_from_epoch = 0
+    # args.start_from_epoch = 0
 
-    args.num_codebook_vectors = 1024
-    args.num_image_tokens = 256
+    # args.num_codebook_vectors = 1024
+    # args.num_image_tokens = 256
 
 
     train_transformer = TrainTransformer(args)

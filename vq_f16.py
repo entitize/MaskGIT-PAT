@@ -20,7 +20,12 @@ class VQModel(nn.Module):
 
     def init_from_ckpt(self, path):
         sd = torch.load(path, map_location="cpu")
-        self.load_state_dict(sd, strict=False)
+        missing_keys, unexpected_keys = self.load_state_dict(sd, strict=False, assign=True)
+        # print("Init from Checkpoint")
+        # print("Missing keys:", missing_keys)
+        # print("Unexpected keys:", unexpected_keys)
+        # for k, v in sd.items():
+        #     print(k, v.shape)
         print(f"Restored from {path}")
 
     def encode(self, x):

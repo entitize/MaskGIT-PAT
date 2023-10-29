@@ -30,9 +30,9 @@ class VQGANTransformer(nn.Module):
         print("Check!")
 
     @staticmethod
-    def load_vqgan():
+    def load_vqgan(args):
         from vq_f16 import VQModel
-        model = VQModel(ckpt_path="./checkpoints/vq-flickr.pt")
+        model = VQModel(ckpt_path=args.checkpoint_path)
         model = model.eval()
         return model
 
