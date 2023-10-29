@@ -5,6 +5,8 @@ import torch.nn.functional as F
 import numpy as np
 import math
 from bidirectional_transformer import BidirectionalTransformer
+from vqgan import VQGAN
+
 _CONFIDENCE_OF_KNOWN_TOKENS = torch.Tensor([torch.inf]).to("cuda")
 
 
@@ -31,15 +33,15 @@ class VQGANTransformer(nn.Module):
 
     @staticmethod
     def load_vqgan(args):
-        from vq_f16 import VQModel
-        model = VQModel(ckpt_path=args.checkpoint_path)
+        model = VQGAN(args)
+        model.load_checkpoint(args.checkpoint_path)
         model = model.eval()
         return model
 
     @torch.no_grad()
     def encode_to_z(self, x):
-        # quant_z, indices, _ = self.vqgan.encode(x)
-        quant_z, _, (_, _, indices) = self.vqgan.encode(x)
+        quant_z, indices, _ = self.vqgan.encode(x)
+        # quant_z, _, (_, _, indices) = self.vqgan.encode(x)
         indices = indices.view(quant_z.shape[0], -1)
         return quant_z, indices
 
@@ -193,8 +195,8 @@ class VQGANTransformer(nn.Module):
         log["new_sample"] = x_new
         return log, torch.concat((x, x_rec, x_sample, x_new))
 
-    def indices_to_image(self, indices, p1=32, p2=32):
-        ix_to_vectors = self.vqgan.codebook.embedding(indices).reshape(indices.shape[0], p1, p2, 32)
+    def indices_to_image(self, indices, p1=16, p2=16):
+        ix_to_vectors = self.vqgan.codebook.embedding(indices).reshape(indices.shape[0], p1, p2, 256)
         # ix_to_vectors = self.vqgan.quantize.embedding(indices).reshape(indices.shape[0], 16, 16, 256)
         ix_to_vectors = ix_to_vectors.permute(0, 3, 1, 2)
         image = self.vqgan.decode(ix_to_vectors)

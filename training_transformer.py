@@ -55,12 +55,12 @@ class TrainTransformer:
                     pbar.set_postfix(Transformer_Loss=np.round(loss.cpu().detach().numpy().item(), 4))
                     pbar.update(0)
                     self.logger.add_scalar("Cross Entropy Loss", np.round(loss.cpu().detach().numpy().item(), 4), (epoch * len_train_dataset) + i)
-            try:
-                log, sampled_imgs = self.model.log_images(imgs[0:1])
-                vutils.save_image(sampled_imgs.add(1).mul(0.5), os.path.join("results", args.run_name, f"{epoch}.jpg"), nrow=4)
-                plot_images(log)
-            except Exception as e:
-                print("Could not plot images", e)
+            # try:
+            log, sampled_imgs = self.model.log_images(imgs[0:1])
+            vutils.save_image(sampled_imgs.add(1).mul(0.5), os.path.join("results", args.run_name, f"{epoch}.jpg"), nrow=4)
+            plot_images(log)
+            # except Exception as e:
+            #     print("Could not plot images", e)
             if epoch % args.ckpt_interval == 0:
                 torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, f"transformer_epoch_{epoch}.pt"))
             torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, "transformer_current.pt"))
@@ -97,9 +97,9 @@ class TrainTransformer:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="VQGAN")
     parser.add_argument('--run-name', type=str)
-    parser.add_argument('--latent-dim', type=int, default=32, help='Latent dimension n_z.')
+    parser.add_argument('--latent-dim', type=int, default=256, help='Latent dimension n_z.')
     parser.add_argument('--image-size', type=int, default=256, help='Image height and width.)')
-    parser.add_argument('--num-codebook-vectors', type=int, default=8192, help='Number of codebook vectors.')
+    parser.add_argument('--num-codebook-vectors', type=int, default=1024, help='Number of codebook vectors.')
     parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar.')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images.')
     parser.add_argument('--dataset-path', type=str, default='./data', help='Path to data.')
@@ -109,7 +109,6 @@ if __name__ == '__main__':
     parser.add_argument('--accum-grad', type=int, default=10, help='Number for gradient accumulation.')
     parser.add_argument('--epochs', type=int, default=300, help='Number of epochs to train.')
     parser.add_argument('--start-from-epoch', type=int, default=1, help='Number of epochs to train.')
-    parser.add_argument('--ckpt-interval', type=int, default=100, help='Number of epochs to train.')
     parser.add_argument('--learning-rate', type=float, default=1e-4, help='Learning rate.')
 
     parser.add_argument('--ckpt-interval', type=int, default=100, help='Interval to save checkpoints')
