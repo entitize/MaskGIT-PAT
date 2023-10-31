@@ -10,6 +10,8 @@ from transformer import VQGANTransformer
 from utils import load_data, plot_images
 from lr_schedule import WarmupLinearLRSchedule
 from torch.utils.tensorboard import SummaryWriter
+import datetime
+import json
 
 
 class TrainTransformer:
@@ -157,6 +159,11 @@ if __name__ == '__main__':
     # args.num_codebook_vectors = 1024
     # args.num_image_tokens = 256
 
-
+    os.makedirs("configs", exist_ok=True)
+    with open(os.path.join("configs", args.run_name + ".json"), "w") as f:
+        args_dict = vars(args)
+        args_dict["time"] = str(datetime.datetime.now())
+        json.dump(args_dict, f, indent=4)
+    
     train_transformer = TrainTransformer(args)
     
