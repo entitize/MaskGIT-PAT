@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 class TrainTransformer:
     def __init__(self, args):
         self.model = VQGANTransformer(args).to(device=args.device)
-        self.optim = self.configure_optimizers()
+        self.optim = self.configure_optimizers(args)
         self.lr_schedule = WarmupLinearLRSchedule(
             optimizer=self.optim,
             init_lr=1e-6,
@@ -65,33 +65,35 @@ class TrainTransformer:
                 torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, f"transformer_epoch_{epoch}.pt"))
             torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, "transformer_current.pt"))
 
-    def configure_optimizers(self):
-        # decay, no_decay = set(), set()
-        # whitelist_weight_modules = (nn.Linear,)
-        # blacklist_weight_modules = (nn.LayerNorm, nn.Embedding)
-        # for mn, m in self.model.transformer.named_modules():
-        #     for pn, p in m.named_parameters():
-        #         fpn = '%s.%s' % (mn, pn) if mn else pn  # full param name
-        
-        #         if pn.endswith('bias'):
-        #             no_decay.add(fpn)
-        
-        #         elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
-        #             decay.add(fpn)
-        
-        #         elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
-        #             no_decay.add(fpn)
-        
-        # # no_decay.add('pos_emb')
-        
-        # param_dict = {pn: p for pn, p in self.model.transformer.named_parameters()}
-        
-        # optim_groups = [
-        #     {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": 4.5e-2},
-        #     {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
-        # ]
-        # optimizer = torch.optim.AdamW(optim_groups, lr=1e-4, betas=(0.9, 0.96))
-        optimizer = torch.optim.Adam(self.model.transformer.parameters(), lr=1e-4, betas=(0.9, 0.96), weight_decay=4.5e-2)
+    def configure_optimizers(self, args):
+        if args.use_custom_optimizer:
+            decay, no_decay = set(), set()
+            whitelist_weight_modules = (nn.Linear,)
+            blacklist_weight_modules = (nn.LayerNorm, nn.Embedding)
+            for mn, m in self.model.transformer.named_modules():
+                for pn, p in m.named_parameters():
+                    fpn = '%s.%s' % (mn, pn) if mn else pn  # full param name
+            
+                    if pn.endswith('bias'):
+                        no_decay.add(fpn)
+            
+                    elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
+                        decay.add(fpn)
+            
+                    elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
+                        no_decay.add(fpn)
+            
+            no_decay.add('pos_emb')
+            
+            param_dict = {pn: p for pn, p in self.model.transformer.named_parameters()}
+            
+            optim_groups = [
+                {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": 4.5e-2},
+                {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
+            ]
+            optimizer = torch.optim.AdamW(optim_groups, lr=1e-4, betas=(0.9, 0.96))
+        else:
+            optimizer = torch.optim.Adam(self.model.transformer.parameters(), lr=1e-4, betas=(0.9, 0.96), weight_decay=4.5e-2)
         return optimizer
 
 
@@ -120,6 +122,8 @@ if __name__ == '__main__':
     parser.add_argument('--dim', type=int, default=768, help='Dimension of transformer.')
     parser.add_argument('--hidden-dim', type=int, default=3072, help='Dimension of transformer.')
     parser.add_argument('--num-image-tokens', type=int, default=256, help='Number of image tokens.')
+
+    parser.add_argument('--use-custom-optimizer', action='store_true', help='Use custom optimizer.')
 
     args = parser.parse_args()
 
