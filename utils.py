@@ -1,4 +1,5 @@
 import os
+import random
 import albumentations
 import numpy as np
 import torch.nn as nn
@@ -16,6 +17,10 @@ class ImagePaths(Dataset):
         self.size = size
 
         self.images = [os.path.join(path, file) for file in os.listdir(path)]
+        for image in self.images:
+            if image.endswith("Store"):
+                self.images.remove(image)
+                break
         self._length = len(self.images)
 
         self.rescaler = albumentations.SmallestMaxSize(max_size=self.size)
@@ -26,12 +31,23 @@ class ImagePaths(Dataset):
         return self._length
 
     def preprocess_image(self, image_path):
-        image = Image.open(image_path)
-        if not image.mode == "RGB":
-            image = image.convert("RGB")
-        image = np.array(image).astype(np.uint8)
-        image = self.preprocessor(image=image)["image"]
-        image = (image / 127.5 - 1.0).astype(np.float32)
+        if image_path.endswith("npy"):
+            image = np.load(image_path)
+            maxValue = np.max(image)
+            minValue = np.min(image)
+            image = (image - minValue) * 2 / (maxValue - minValue) - 1.0
+            assert image.shape[1] - self.size >= 0 and image.shape[0] - self.size, f"Image Size {self.size} is too large for images {image.shape}"
+            x = random.randint(0, image.shape[1] - self.size)
+            y = random.randint(0, image.shape[0] - self.size)
+            image = image[y:y+self.size, x:x+self.size]
+            image = np.expand_dims(image.astype(np.float32), axis=2)
+        else:
+            image = Image.open(image_path)
+            if not image.mode == "RGB":
+                image = image.convert("RGB")
+            image = np.array(image).astype(np.uint8)
+            image = self.preprocessor(image=image)["image"]
+            image = (image / 127.5 - 1.0).astype(np.float32)
         image = image.transpose(2, 0, 1)
         return image
 

@@ -59,7 +59,7 @@ class TrainVQGAN:
         for epoch in range(args.epochs):
             with tqdm(range(len(train_dataset))) as pbar:
                 for i, imgs in zip(pbar, train_dataset):
-                    if args.image_channels == 1:
+                    if args.image_channels == 1 and imgs.size(dim=-1) == 3:
                         imgs = transforms.Grayscale()(imgs).to(device=args.device)
                     else:
                         imgs = imgs.to(device=args.device)
