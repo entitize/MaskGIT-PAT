@@ -208,14 +208,17 @@ class VQGANTransformer(nn.Module):
         mask[:, :, x_start:x_start + size, y_start:y_start + size] = 0
         return image * mask, mask
 
-    def inpainting(self, image: torch.Tensor, x_start: int = 100, y_start: int = 100, size: int = 50):
+    def inpainting(self, image: torch.Tensor, x_start: int = 100, y_start: int = 100, size: int = 50, device="cuda"):
         # Note: this function probably doesnt work yet lol
         # apply mask on image
         masked_image, mask = self.create_masked_image(image, x_start, y_start, size)
 
+        masked_image = masked_image.to(device=device)
+        mask = mask.to(device=device)
+
         # encode masked image
         # _, indices = self.encode_to_z(masked_image)
-        indices = torch.randint(1024, (1, 256), dtype=torch.int)
+        indices = torch.randint(1024, (1, 256), dtype=torch.int, device=device)
         mask = mask[:, 0, :, :]
 
         # set masked patches to be 0 -> so that the sampling part only samples indices for these patches
@@ -234,7 +237,7 @@ class VQGANTransformer(nn.Module):
         indices = indices_mask * indices
 
         # inpaint the image by using the sample method and provide the masked image indices and condition
-        sampled_indices = self.sample(indices)
+        sampled_indices = self.sample_good(indices)
 
         # reconstruct inpainted image
         inpainted_image = self.indices_to_image(sampled_indices)
@@ -246,14 +249,14 @@ class VQGANTransformer(nn.Module):
 
         # define mask for blending
         n = 128
-        base = torch.arange(n).view(1, -1).max(torch.arange(n).view(-1, 1))
+        base = torch.arange(n, device=device).view(1, -1).max(torch.arange(n, device=device).view(-1, 1))
         right = torch.stack((torch.rot90(base, 1, [0, 1]), base)).reshape(n * 2, n)
         left = torch.stack((torch.rot90(base, 2, [0, 1]), torch.rot90(base, 3, [0, 1]))).reshape(n * 2, n)
         full = torch.cat((left, right), 1)
 
         # construct opacity matrix for intra region
-        min_blend = torch.min(torch.where(intra == 1, full, 1000000))
-        max_blend = torch.max(torch.where(intra == 1, full, -1000000))
+        min_blend = torch.min(torch.where(intra == 1, full, torch.tensor(1000000, device=device)))
+        max_blend = torch.max(torch.where(intra == 1, full, torch.tensor(-1000000, device=device)))
         mask_blend = torch.where(intra == 1, (full - min_blend) / max_blend, torch.ones_like(intra, dtype=torch.float))
 
         mask_real = torch.where(mask == 0, mask.type(torch.float), mask_blend)
@@ -261,5 +264,7 @@ class VQGANTransformer(nn.Module):
 
         blended_image = mask_real * image + mask_fake * inpainted_image
 
-        return blended_image, inpainted_image
+        no_blend_image = mask * image + (1 - mask) * inpainted_image
+
+        return blended_image, inpainted_image, no_blend_image
 
