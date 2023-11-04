@@ -6,10 +6,10 @@ class Encoder(nn.Module):
     def __init__(self, args):
         super(Encoder, self).__init__()
         channels = [128, 128, 128, 256, 256, 512]
-        attn_resolutions = [16]
+        attn_resolutions = [args.image_size // args.patch_size]
         num_res_blocks = 2
         layers = [nn.Conv2d(args.image_channels, channels[0], 3, 1, 1)]
-        resolution = 256
+        resolution = args.image_size
         for i in range(len(channels)-1):
             in_channels = channels[i]
             out_channels = channels[i + 1]
@@ -18,7 +18,7 @@ class Encoder(nn.Module):
                 in_channels = out_channels
                 if resolution in attn_resolutions:
                     layers.append(NonLocalBlock(in_channels))
-            if i != len(channels) - 2:
+            if resolution > attn_resolutions[0]:
                 layers.append(DownSampleBlock(channels[i+1]))
                 resolution //= 2
         layers.append(ResidualBlock(channels[-1], channels[-1]))

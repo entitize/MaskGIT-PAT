@@ -5,11 +5,11 @@ from helper import ResidualBlock, NonLocalBlock, UpSampleBlock, GroupNorm, Swish
 class Decoder(nn.Module):
     def __init__(self, args):
         super(Decoder, self).__init__()
-        attn_resolutions = [16]
+        attn_resolutions = [args.image_size // args.patch_size]
         ch_mult = [128, 128, 256, 256, 512]
         num_resolutions = len(ch_mult)
         block_in = ch_mult[num_resolutions-1]
-        curr_res = 256 // 2**(num_resolutions-1)
+        curr_res = args.image_size // args.patch_size
 
         layers = [nn.Conv2d(args.latent_dim, block_in, kernel_size=3, stride=1, padding=1),
                   ResidualBlock(block_in, block_in),
@@ -24,7 +24,7 @@ class Decoder(nn.Module):
                 block_in = block_out
                 if curr_res in attn_resolutions:
                     layers.append(NonLocalBlock(block_in))
-            if i != 0:
+            if curr_res < args.image_size:
                 layers.append(UpSampleBlock(block_in))
                 curr_res = curr_res * 2
 
