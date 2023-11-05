@@ -92,8 +92,10 @@ class TrainVQGAN:
 
                     if i % args.save_img_rate == 0:
                         with torch.no_grad():
-                            both = torch.cat((imgs[:4], decoded_images[:4]))
-                            vutils.save_image(both, os.path.join("results", args.experiment_name, f"{epoch}_{i}.jpg"), nrow=4)
+                            color_bar = torch.linspace(0, 1, args.image_size).unsqueeze(1).expand(1, args.image_channels, args.image_size, args.image_size)
+                            color_bar = color_bar.to(device=args.device)
+                            both = torch.cat((imgs.add(1).mul(0.5)[:4], color_bar, decoded_images.add(1).mul(0.5)[:4], color_bar))
+                            vutils.save_image(both, os.path.join("results", args.experiment_name, f"{epoch}_{i}.jpg"), nrow=5)
 
                             # save image to tensorboard
                             grid = vutils.make_grid(both, nrow=4)
