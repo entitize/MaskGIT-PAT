@@ -3,8 +3,8 @@
 #Submit this script with: sbatch thefilename
 #SBATCH -A mlprojects
 
-#SBATCH --time=1:00:00   # walltime, timeout (if script runs longer than specified, it will timeout). Setting it higher results in lower priority on HPC
-#SBATCH --ntasks=2   # number of processor cores (i.e. tasks)
+#SBATCH --time=0:20:00   # walltime, timeout (if script runs longer than specified, it will timeout). Setting it higher results in lower priority on HPC
+#SBATCH --ntasks=1   # number of processor cores (i.e. tasks)
 #SBATCH --nodes=1   # number of nodes
 #SBATCH --gres=gpu:1 # number of GPUs
 #SBATCH --mem-per-cpu=5G # memory per CPU core
