@@ -21,6 +21,7 @@ pip install numpy
 pip install albumentations
 pip install matplotlib
 pip install tensorboard
+pip install einops
 ```
 
 In order to potentially prevent running space on home directory on HPC, create symlinks to `/groups/mlprojects/pat/`

@@ -10,12 +10,14 @@ from transformer import VQGANTransformer
 from utils import load_data, plot_images
 from lr_schedule import WarmupLinearLRSchedule
 from torch.utils.tensorboard import SummaryWriter
+import datetime
+import json
 
 
 class TrainTransformer:
     def __init__(self, args):
         self.model = VQGANTransformer(args).to(device=args.device)
-        self.optim = self.configure_optimizers()
+        self.optim = self.configure_optimizers(args)
         self.lr_schedule = WarmupLinearLRSchedule(
             optimizer=self.optim,
             init_lr=1e-6,
@@ -55,62 +57,66 @@ class TrainTransformer:
                     pbar.set_postfix(Transformer_Loss=np.round(loss.cpu().detach().numpy().item(), 4))
                     pbar.update(0)
                     self.logger.add_scalar("Cross Entropy Loss", np.round(loss.cpu().detach().numpy().item(), 4), (epoch * len_train_dataset) + i)
-            try:
-                log, sampled_imgs = self.model.log_images(imgs[0:1])
-                vutils.save_image(sampled_imgs.add(1).mul(0.5), os.path.join("results", f"{epoch}.jpg"), nrow=4)
-                plot_images(log)
-            except:
-                pass
+            # try:
+            log, sampled_imgs = self.model.log_images(imgs[0:1])
+            vutils.save_image(sampled_imgs.add(1).mul(0.5), os.path.join("results", args.run_name, f"{epoch}.jpg"), nrow=4)
+            plot_images(log)
+            # except Exception as e:
+            #     print("Could not plot images", e)
             if epoch % args.ckpt_interval == 0:
-                torch.save(self.model.state_dict(), os.path.join("checkpoints", f"transformer_epoch_{epoch}.pt"))
-            torch.save(self.model.state_dict(), os.path.join("checkpoints", "transformer_current.pt"))
+                torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, f"transformer_epoch_{epoch}.pt"))
+            torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, "transformer_current.pt"))
 
-    def configure_optimizers(self):
-        # decay, no_decay = set(), set()
-        # whitelist_weight_modules = (nn.Linear,)
-        # blacklist_weight_modules = (nn.LayerNorm, nn.Embedding)
-        # for mn, m in self.model.transformer.named_modules():
-        #     for pn, p in m.named_parameters():
-        #         fpn = '%s.%s' % (mn, pn) if mn else pn  # full param name
-        #
-        #         if pn.endswith('bias'):
-        #             no_decay.add(fpn)
-        #
-        #         elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
-        #             decay.add(fpn)
-        #
-        #         elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
-        #             no_decay.add(fpn)
-        #
-        # # no_decay.add('pos_emb')
-        #
-        # param_dict = {pn: p for pn, p in self.model.transformer.named_parameters()}
-        #
-        # optim_groups = [
-        #     {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": 4.5e-2},
-        #     {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
-        # ]
-        optimizer = torch.optim.Adam(self.model.transformer.parameters(), lr=1e-4, betas=(0.9, 0.96), weight_decay=4.5e-2)
+    def configure_optimizers(self, args):
+        if args.use_custom_optimizer:
+            decay, no_decay = set(), set()
+            whitelist_weight_modules = (nn.Linear,)
+            blacklist_weight_modules = (nn.LayerNorm, nn.Embedding)
+            for mn, m in self.model.transformer.named_modules():
+                for pn, p in m.named_parameters():
+                    fpn = '%s.%s' % (mn, pn) if mn else pn  # full param name
+            
+                    if pn.endswith('bias'):
+                        no_decay.add(fpn)
+            
+                    elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
+                        decay.add(fpn)
+            
+                    elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
+                        no_decay.add(fpn)
+            
+            no_decay.add('pos_emb')
+            
+            param_dict = {pn: p for pn, p in self.model.transformer.named_parameters()}
+            
+            optim_groups = [
+                {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": 4.5e-2},
+                {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
+            ]
+            optimizer = torch.optim.AdamW(optim_groups, lr=1e-4, betas=(0.9, 0.96))
+        else:
+            optimizer = torch.optim.Adam(self.model.transformer.parameters(), lr=1e-4, betas=(0.9, 0.96), weight_decay=4.5e-2)
         return optimizer
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="VQGAN")
     parser.add_argument('--run-name', type=str)
-    parser.add_argument('--latent-dim', type=int, default=32, help='Latent dimension n_z.')
+    parser.add_argument('--latent-dim', type=int, default=256, help='Latent dimension n_z.')
     parser.add_argument('--image-size', type=int, default=256, help='Image height and width.)')
-    parser.add_argument('--num-codebook-vectors', type=int, default=8192, help='Number of codebook vectors.')
+    parser.add_argument('--num-codebook-vectors', type=int, default=1024, help='Number of codebook vectors.')
     parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar.')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images.')
     parser.add_argument('--dataset-path', type=str, default='./data', help='Path to data.')
-    parser.add_argument('--checkpoint-path', type=str, default='./checkpoints/last_ckpt.pt', help='Path to checkpoint.')
+    parser.add_argument('--checkpoint-path', type=str, default=None, help='Path to checkpoint.')
     parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on.')
     parser.add_argument('--batch-size', type=int, default=10, help='Batch size for training.')
     parser.add_argument('--accum-grad', type=int, default=10, help='Number for gradient accumulation.')
     parser.add_argument('--epochs', type=int, default=300, help='Number of epochs to train.')
     parser.add_argument('--start-from-epoch', type=int, default=1, help='Number of epochs to train.')
-    parser.add_argument('--ckpt-interval', type=int, default=100, help='Number of epochs to train.')
     parser.add_argument('--learning-rate', type=float, default=1e-4, help='Learning rate.')
+
+    parser.add_argument('--ckpt-interval', type=int, default=100, help='Interval to save checkpoints')
 
     parser.add_argument('--sos-token', type=int, default=1025, help='Start of Sentence token.')
 
@@ -119,22 +125,45 @@ if __name__ == '__main__':
     parser.add_argument('--hidden-dim', type=int, default=3072, help='Dimension of transformer.')
     parser.add_argument('--num-image-tokens', type=int, default=256, help='Number of image tokens.')
 
+    parser.add_argument('--use-custom-optimizer', action='store_true', help='Use custom optimizer.')
+
     args = parser.parse_args()
+
+    # make sure run-name is unique by looking at results dir
+    i = 1
+    original_run_name = args.run_name
+    while os.path.exists(os.path.join("checkpoints", args.run_name)):
+        args.run_name = original_run_name + "_" + str(i)
+        i += 1
+    if i > 1:
+        print("Experiment name already exists. Changing experiment name to: ", args.run_name)
+
+    print("Running experiment: ", args.run_name)
+
+    os.makedirs(os.path.join("checkpoints", args.run_name), exist_ok=True)
+    os.makedirs(os.path.join("results", args.run_name), exist_ok=True)
+
+
     # args.run_name = "<name>"
     # args.dataset_path = r"C:\Users\dome\datasets\landscape"
     # args.checkpoint_path = r".\checkpoints"
-    args.n_layers = 24
-    args.dim = 768
-    args.hidden_dim = 3072
-    args.batch_size = 4
-    args.accum_grad = 25
-    args.epochs = 1000
+    # args.n_layers = 24
+    # args.dim = 768
+    # args.hidden_dim = 3072
+    # args.batch_size = 4
+    # args.accum_grad = 25
+    # args.epochs = 1000
 
-    args.start_from_epoch = 0
+    # args.start_from_epoch = 0
 
-    args.num_codebook_vectors = 1024
-    args.num_image_tokens = 256
+    # args.num_codebook_vectors = 1024
+    # args.num_image_tokens = 256
 
-
+    os.makedirs("configs", exist_ok=True)
+    with open(os.path.join("configs", args.run_name + ".json"), "w") as f:
+        args_dict = vars(args)
+        args_dict["time"] = str(datetime.datetime.now())
+        json.dump(args_dict, f, indent=4)
+    
     train_transformer = TrainTransformer(args)
     
