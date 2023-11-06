@@ -217,8 +217,7 @@ class VQGANTransformer(nn.Module):
         mask = mask.to(device=device)
 
         # encode masked image
-        # _, indices = self.encode_to_z(masked_image)
-        indices = torch.randint(1024, (1, 256), dtype=torch.int, device=device)
+        _, indices = self.encode_to_z(masked_image)
         mask = mask[:, 0, :, :]
 
         # set masked patches to be 0 -> so that the sampling part only samples indices for these patches
