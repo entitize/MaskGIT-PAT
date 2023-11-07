@@ -131,7 +131,11 @@ class TrainVQGAN:
                     pbar.update(0)
 
                     self.logger.add_scalar("VQ Loss", np.round(loss_vq.cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
-                    self.logger.add_scalar("GAN Loss", np.round(loss_gan.cpu().detach().numpy().item(), 3), (epoch * steps_one_epoch) + i)
+                    self.logger.add_scalar("Rec Loss", np.round(rec_loss.mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                    self.logger.add_scalar("Perceptual Loss", np.round(perceptual_loss.mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                    self.logger.add_scalar("Codebook Loss", np.round(q_loss.cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                    self.logger.add_scalar("G Loss", np.round(g_loss.mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                    self.logger.add_scalar("Disc Loss", np.round(loss_gan.cpu().detach().numpy().item(), 3), (epoch * steps_one_epoch) + i)
                 checkpoint = {
                     "vqgan":self.vqgan.state_dict(),
                     "discriminator":self.discriminator.state_dict(),
