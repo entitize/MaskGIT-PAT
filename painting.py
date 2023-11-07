@@ -6,6 +6,7 @@ from torchvision import transforms
 from PIL import Image
 from utils import load_data, plot_images
 from torchvision import utils as vutils
+from tqdm import tqdm
 
 class Painting:
 
@@ -19,23 +20,25 @@ class Painting:
         # TODO: What images should we inpaint?
         # TODO: We need to figure out a way to encode and pass in the bounded box regions
 
-        image_path = "/groups/mlprojects/pat/landscape/00000228_(3).jpg"
-
         # TODO: Custom dataset
         dataset = load_data(self.args)
-        sample_image = next(iter(dataset)).to(device=self.args.device)
+        # sample_image = next(iter(dataset)).to(device=self.args.device)
+        dataset = iter(dataset)
+        for i in tqdm(range(self.args.num_inpainting_images)):
+            sample_image = next(dataset).to(device=self.args.device)
+            masked_image, _ = self.model.create_masked_image(sample_image)
+            blended_image, inpainted_image, no_blend_image = self.model.inpainting(sample_image)
 
-        # TODO: Currently just using default bounding box, but we need to figure out how to pass in the bounding box
-        masked_image, _ = self.model.create_masked_image(sample_image)
+            # create a directory for each image
+            os.makedirs(os.path.join(self.args.inpainting_results_dir, f"image_{i}"), exist_ok=True)
 
-        blended_image, inpainted_image, no_blend_image = self.model.inpainting(sample_image)
-        
-        vutils.save_image(masked_image, os.path.join(self.args.inpainting_results_dir, "masked_image.jpg"))
-        vutils.save_image(blended_image, os.path.join(self.args.inpainting_results_dir, "blended_image.jpg"))
-        vutils.save_image(inpainted_image, os.path.join(self.args.inpainting_results_dir, "inpainted_image.jpg"))
-        vutils.save_image(no_blend_image, os.path.join(self.args.inpainting_results_dir, "no_blend_image.jpg"))
+            full_path = os.path.join(self.args.inpainting_results_dir, f"image_{i}")
 
-        vutils.save_image(sample_image, os.path.join(self.args.inpainting_results_dir, "original_image.jpg"))
+            vutils.save_image(masked_image, os.path.join(full_path, f"masked_image.jpg"))
+            vutils.save_image(blended_image, os.path.join(full_path, f"blended_image.jpg"))
+            vutils.save_image(inpainted_image, os.path.join(full_path, f"inpainted_image.jpg"))
+            vutils.save_image(no_blend_image, os.path.join(full_path, f"no_blend_image.jpg"))
+            vutils.save_image(sample_image, os.path.join(full_path, f"original_image.jpg"))
 
         print(f"Saved inpainting results to {self.args.inpainting_results_dir}")
 
@@ -72,14 +75,15 @@ if __name__ == '__main__':
         "dim": 768,
         "hidden_dim": 3072,
         "num_image_tokens": 256,
-        "num_image_tokens": 256,
         "checkpoint_path": "./checkpoints/baseline_landscape_3days/vqgan_epoch_240.pt", # vqgan
+        "patch_size": 16,
 
         # NOTE: the following args are custom to this painting task
         "dataset_path": "/groups/mlprojects/pat/landscape/",
         "transformer_checkpoint_path": "./checkpoints/three_day_transformer_landscape_custom_optimizer/transformer_epoch_500.pt", # transformer
         "inpainting_results_dir": "./results/inpainting_exps",
         "device": "cuda",
+        "num_inpainting_images": 10,
     }
     args = argparse.Namespace(**args)
 
