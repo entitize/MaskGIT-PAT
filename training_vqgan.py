@@ -123,8 +123,13 @@ class TrainVQGAN:
                             vutils.save_image(both, os.path.join("results", args.experiment_name, f"{epoch}_{i}.jpg"), nrow=5)
 
                             # save image to tensorboard
-                            grid = vutils.make_grid(both, nrow=4)
+                            grid = vutils.make_grid(both, nrow=5)
                             self.logger.add_image(f"train_images_{i}", grid, (epoch * steps_one_epoch) + i)
+                            self.logger.add_scalar("Save Rec Loss 1", np.round(rec_loss[0].mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                            self.logger.add_scalar("Save Rec Loss 2", np.round(rec_loss[1].mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                            self.logger.add_scalar("Save Rec Loss 3", np.round(rec_loss[2].mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                            self.logger.add_scalar("Save Rec Loss 4", np.round(rec_loss[3].mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                            
 
                     pbar.set_postfix(VQ_Loss=np.round(loss_vq.cpu().detach().numpy().item(), 5),
                                      GAN_Loss=np.round(loss_gan.cpu().detach().numpy().item(), 3))
