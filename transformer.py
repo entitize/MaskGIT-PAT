@@ -34,7 +34,8 @@ class VQGANTransformer(nn.Module):
     @staticmethod
     def load_vqgan(args):
         model = VQGAN(args)
-        model.load_checkpoint(args.checkpoint_path)
+        # model.load_checkpoint(args.checkpoint_path)
+        model.load_state_dict(torch.load(args.checkpoint_path)["vqgan"])
         model = model.eval()
         return model
 

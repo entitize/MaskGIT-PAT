@@ -127,6 +127,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--use-custom-optimizer', action='store_true', help='Use custom optimizer.')
 
+    parser.add_argument('--patch-size', type=int, default=16, help='Patch size')
+
     args = parser.parse_args()
 
     # make sure run-name is unique by looking at results dir
