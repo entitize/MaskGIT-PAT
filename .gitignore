@@ -5,3 +5,5 @@ vgg_lpips
 slurm*
 runs
 configs
+wandb
+cnn
