@@ -2,6 +2,7 @@
 # coding: utf-8
 
 # <a href="https://colab.research.google.com/github/ayulockin/deepimageinpainting/blob/master/Image_Inpainting_Autoencoder_Decoder_v2_0.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+# source: https://github.com/ayulockin/deepimageinpainting/tree/master
 
 # # Setups, Installations and Imports
 # get_ipython().system('pip install tensorflow')
@@ -252,8 +253,8 @@ if __name__ == '__main__':
 
     group = parser.add_mutually_exclusive_group()
 
-    group.add_argument('--limited_view', action='store_true', help='This will use a square mask instead of random stroke masks')
-    group.add_argument('--spatial_aliasing', action='store_true', help='This will mimic spatial aliasing instead of random stroke masks')
+    group.add_argument('--limited-view', action='store_true', help='This will use a square mask instead of random stroke masks')
+    group.add_argument('--spatial-aliasing', action='store_true', help='This will mimic spatial aliasing instead of random stroke masks')
 
 
     args = parser.parse_args()
