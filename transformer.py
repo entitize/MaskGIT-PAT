@@ -1,3 +1,4 @@
+import math
 import os
 import torch
 import torch.nn as nn
@@ -6,13 +7,15 @@ import numpy as np
 import math
 from bidirectional_transformer import BidirectionalTransformer
 from vqgan import VQGAN
+import matplotlib.pyplot as plt
+
 
 _CONFIDENCE_OF_KNOWN_TOKENS = torch.Tensor([torch.inf]).to("cuda")
-
 
 class VQGANTransformer(nn.Module):
     def __init__(self, args):
         super().__init__()
+        self.args = args
         self.num_image_tokens = args.num_image_tokens
         self.sos_token = args.num_codebook_vectors + 1
         self.mask_token_id = args.num_codebook_vectors
@@ -35,7 +38,7 @@ class VQGANTransformer(nn.Module):
     def load_vqgan(args):
         model = VQGAN(args)
         # model.load_checkpoint(args.checkpoint_path)
-        model.load_state_dict(torch.load(args.checkpoint_path)["vqgan"])
+        model.load_state_dict(torch.load(args.checkpoint_path)["vqgan"])        
         model = model.eval()
         return model
 
@@ -107,7 +110,7 @@ class VQGANTransformer(nn.Module):
         # Shift the label by codebook_size
         # label_tokens = label_tokens + self.vqgan.codebook.num_codebook_vectors
         # Create blank masked tokens
-        blank_tokens = torch.ones((num, self.num_image_tokens), device="cuda")
+        blank_tokens = torch.ones((num, self.num_image_tokens), device=self.args.device)
         masked_tokens = self.mask_token_id * blank_tokens
         # Concatenate the two as input_tokens
         # input_tokens = torch.concat([label_tokens, masked_tokens], dim=-1)
@@ -120,7 +123,7 @@ class VQGANTransformer(nn.Module):
         return logits
 
     def mask_by_random_topk(self, mask_len, probs, temperature=1.0):
-        confidence = torch.log(probs) + temperature * torch.distributions.gumbel.Gumbel(0, 1).sample(probs.shape).to("cuda")
+        confidence = torch.log(probs) + temperature * torch.distributions.gumbel.Gumbel(0, 1).sample(probs.shape).to(self.args.device)
         sorted_confidence, _ = torch.sort(confidence, dim=-1)
         # Obtains cut off threshold given the mask lengths.
         cut_off = torch.take_along_dim(sorted_confidence, mask_len.to(torch.long), dim=-1)
@@ -131,12 +134,14 @@ class VQGANTransformer(nn.Module):
     @torch.no_grad()
     def sample_good(self, inputs=None, num=1, T=11, mode="cosine"):
         self.transformer.eval()
+
+
         N = self.num_image_tokens
         if inputs is None:
             inputs = self.create_input_tokens_normal(num)
         else:
             inputs = torch.hstack(
-                (inputs, torch.zeros((inputs.shape[0], N - inputs.shape[1]), device="cuda", dtype=torch.int).fill_(self.mask_token_id)))
+                (inputs, torch.zeros((inputs.shape[0], N - inputs.shape[1]), device=self.args.device, dtype=torch.int).fill_(self.mask_token_id)))
 
         sos_tokens = torch.ones(inputs.shape[0], 1, dtype=torch.long, device=inputs.device) * self.sos_token
         inputs = torch.cat((sos_tokens, inputs), dim=1)
@@ -196,23 +201,64 @@ class VQGANTransformer(nn.Module):
         log["new_sample"] = x_new
         return log, torch.concat((x, x_rec, x_sample, x_new))
 
-    def indices_to_image(self, indices, p1=16, p2=16):
-        ix_to_vectors = self.vqgan.codebook.embedding(indices).reshape(indices.shape[0], p1, p2, 256)
+    def indices_to_image(self, indices):
+        p1 = p2 = int(math.sqrt(self.args.num_image_tokens))
+        # ix_to_vectors = self.vqgan.codebook.embedding(indices).reshape(indices.shape[0], p1, p2, self.args.image_size)
+        ix_to_vectors = self.vqgan.codebook.embedding(indices).reshape(indices.shape[0], p1, p2, self.args.latent_dim)
         # ix_to_vectors = self.vqgan.quantize.embedding(indices).reshape(indices.shape[0], 16, 16, 256)
         ix_to_vectors = ix_to_vectors.permute(0, 3, 1, 2)
         image = self.vqgan.decode(ix_to_vectors)
         return image
-
+    
     @staticmethod
-    def create_masked_image(image: torch.Tensor, x_start: int = 100, y_start: int = 100, size: int = 50):
+    def create_multi_masked_image(image: torch.Tensor, masks: list):
         mask = torch.ones_like(image, dtype=torch.int)
-        mask[:, :, x_start:x_start + size, y_start:y_start + size] = 0
+        for x_start, y_start, x_size, y_size in masks:
+            mask[:, :, x_start:x_start + x_size, y_start:y_start + y_size] = 0
         return image * mask, mask
 
-    def inpainting(self, image: torch.Tensor, x_start: int = 100, y_start: int = 100, size: int = 50, device="cuda"):
+    @staticmethod
+    def create_masked_image(image: torch.Tensor, x_start: int = 100, y_start: int = 100, x_size: int = 50, y_size: int = 50):
+        mask = torch.ones_like(image, dtype=torch.int)
+        mask[:, :, x_start:x_start + x_size, y_start:y_start + y_size] = 0
+        return image * mask, mask
+    
+    def custom_inpainting(self, x):
+        # TODO: Mask on the indices, not image
+        _, z_indices = self.encode_to_z(x)
+        p = int(math.sqrt(self.args.num_image_tokens))
+        masked_z_indices = z_indices.reshape(z_indices.shape[0], p, p)
+
+        # TODO: Make this customizable, currently masks center 1/3 of image
+        # masked_z_indices[:, p // 3:2 * p // 3, p // 3:2 * p // 3] = self.mask_token_id
+
+        # create a "half" sample
+        z_start_indices_half = z_indices[:, :z_indices.shape[1] // 2]
+        half_index_sample_indexes = self.sample_good(z_start_indices_half)
+        half_sample_image = self.indices_to_image(half_index_sample_indexes)
+
+        # masked_z_indices = masked_z_indices.reshape(z_indices.shape[0], -1).to(torch.int64).to(self.args.device)
+        # masked_image = self.indices_to_image(masked_z_indices)
+        # inpainted_indices = self.sample_good(masked_z_indices)
+        # inpainted_image = self.indices_to_image(inpainted_indices)
+
+        index_map = {
+            "original": z_indices.cpu(),
+            # "masked": masked_z_indices,
+            # "inpainted": inpainted_indices,
+            "half_index_sample_indexes": half_index_sample_indexes.cpu(),
+        }
+
+        return index_map, half_sample_image, half_sample_image
+
+    def inpainting(self, image: torch.Tensor, x_start: int = 100, y_start: int = 100, size: int = 50, multi_mask=[]):
+        device = self.args.device
         # Note: this function probably doesnt work yet lol
         # apply mask on image
-        masked_image, mask = self.create_masked_image(image, x_start, y_start, size)
+        if len(multi_mask) > 0:
+            masked_image, mask = self.create_multi_masked_image(image, multi_mask)
+        else:
+            masked_image, mask = self.create_masked_image(image, x_start, y_start, size)
 
         masked_image = masked_image.to(device=device)
         mask = mask.to(device=device)
