@@ -43,7 +43,9 @@ class TrainTransformer:
         step = args.start_from_epoch * len_train_dataset
         for epoch in range(args.start_from_epoch+1, args.epochs+1):
             print(f"Epoch {epoch}:")
-            with tqdm(range(len(train_dataset))) as pbar:
+            num_train_samples = len(train_dataset) if args.num_train_samples == -1 else args.num_train_samples
+            # with tqdm(range(len(train_dataset))) as pbar:
+            with tqdm(range(num_train_samples)) as pbar:
                 self.lr_schedule.step()
                 for i, imgs in zip(pbar, train_dataset):
                     imgs = imgs.to(device=args.device)
@@ -57,12 +59,11 @@ class TrainTransformer:
                     pbar.set_postfix(Transformer_Loss=np.round(loss.cpu().detach().numpy().item(), 4))
                     pbar.update(0)
                     self.logger.add_scalar("Cross Entropy Loss", np.round(loss.cpu().detach().numpy().item(), 4), (epoch * len_train_dataset) + i)
-            # try:
-            log, sampled_imgs = self.model.log_images(imgs[0:1])
-            vutils.save_image(sampled_imgs.add(1).mul(0.5), os.path.join("results", args.run_name, f"{epoch}.jpg"), nrow=4)
-            plot_images(log)
-            # except Exception as e:
-            #     print("Could not plot images", e)
+
+            if not args.disable_log_images:
+                idxs_map, sampled_imgs = self.model.log_images(imgs[0:1])
+                vutils.save_image(sampled_imgs.add(1).mul(0.5), os.path.join("results", args.run_name, f"{epoch}.jpg"), nrow=5)
+           
             if epoch % args.ckpt_interval == 0:
                 torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, f"transformer_epoch_{epoch}.pt"))
             torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, "transformer_current.pt"))
@@ -126,6 +127,12 @@ if __name__ == '__main__':
     parser.add_argument('--num-image-tokens', type=int, default=256, help='Number of image tokens.')
 
     parser.add_argument('--use-custom-optimizer', action='store_true', help='Use custom optimizer.')
+
+    parser.add_argument('--patch-size', type=int, default=16, help='Patch size')
+
+    parser.add_argument('--num-train-samples', type=int, default=-1, help='Number of training samples. -1 for all samples.')
+
+    parser.add_argument('--disable-log-images', action='store_true', help='Disable logging images.')
 
     args = parser.parse_args()
 

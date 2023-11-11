@@ -21,10 +21,13 @@ class TrainVQGAN:
         self.discriminator.apply(weights_init)
         self.perceptual_loss = LPIPS().eval().to(device=args.device)
         self.opt_vq, self.opt_disc = self.configure_optimizers(args)
+        self.start_epoch = 0
 
         self.logger = SummaryWriter(f"./runs/{args.experiment_name}")
 
         self.prepare_training()
+        if args.resume_exp:
+            self.resume_training()
 
         self.train(args)
 
@@ -41,6 +44,28 @@ class TrainVQGAN:
             json.dump(args_dict, f, indent=4)
 
 
+    def resume_training(self):
+        checkpoints = os.listdir(os.path.join("checkpoints", args.experiment_name))
+        if len(checkpoints) > 0:
+            checkpoints.sort()
+            newest_epoch = checkpoints[-1][:-3].split('_')[-1]
+            newest_epoch = int(newest_epoch)
+            for checkpoint in checkpoints:
+                epoch = checkpoint[:-3].split('_')[-1]
+                epoch = int(epoch)
+                if epoch > newest_epoch:
+                    newest_epoch = epoch
+            checkpoint = torch.load(os.path.join("checkpoints", args.experiment_name, f"vqgan_epoch_{newest_epoch}.pt"))
+            print(f"Resuming from epoch: {newest_epoch}")
+            self.vqgan.load_state_dict(checkpoint["vqgan"])
+            self.discriminator.load_state_dict(checkpoint["discriminator"])
+            self.opt_vq.load_state_dict(checkpoint["opt_vq"])
+            self.opt_disc.load_state_dict(checkpoint["opt_disc"])
+            self.start_epoch = newest_epoch + 1
+        else:
+            print("Find no checkpoint!")
+                    
+    
     def configure_optimizers(self, args):
         lr = args.learning_rate
         opt_vq = torch.optim.Adam(list(self.vqgan.encoder.parameters()) +
@@ -56,7 +81,7 @@ class TrainVQGAN:
     def train(self, args):
         train_dataset = load_data(args)
         steps_one_epoch = len(train_dataset)
-        for epoch in range(args.epochs):
+        for epoch in range(self.start_epoch, args.epochs):
             with tqdm(range(len(train_dataset))) as pbar:
                 for i, imgs in zip(pbar, train_dataset):
                     imgs = imgs.to(device=args.device)
@@ -98,16 +123,31 @@ class TrainVQGAN:
                             vutils.save_image(both, os.path.join("results", args.experiment_name, f"{epoch}_{i}.jpg"), nrow=5)
 
                             # save image to tensorboard
-                            grid = vutils.make_grid(both, nrow=4)
+                            grid = vutils.make_grid(both, nrow=5)
                             self.logger.add_image(f"train_images_{i}", grid, (epoch * steps_one_epoch) + i)
+                            self.logger.add_scalar("Save Rec Loss 1", np.round(rec_loss[0].mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                            self.logger.add_scalar("Save Rec Loss 2", np.round(rec_loss[1].mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                            self.logger.add_scalar("Save Rec Loss 3", np.round(rec_loss[2].mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                            self.logger.add_scalar("Save Rec Loss 4", np.round(rec_loss[3].mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                            
 
                     pbar.set_postfix(VQ_Loss=np.round(loss_vq.cpu().detach().numpy().item(), 5),
                                      GAN_Loss=np.round(loss_gan.cpu().detach().numpy().item(), 3))
                     pbar.update(0)
 
                     self.logger.add_scalar("VQ Loss", np.round(loss_vq.cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
-                    self.logger.add_scalar("GAN Loss", np.round(loss_gan.cpu().detach().numpy().item(), 3), (epoch * steps_one_epoch) + i)
-                torch.save(self.vqgan.state_dict(), os.path.join("checkpoints", args.experiment_name, f"vqgan_epoch_{epoch}.pt"))
+                    self.logger.add_scalar("Rec Loss", np.round(rec_loss.mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                    self.logger.add_scalar("Perceptual Loss", np.round(perceptual_loss.mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                    self.logger.add_scalar("Codebook Loss", np.round(q_loss.cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                    self.logger.add_scalar("G Loss", np.round(g_loss.mean().cpu().detach().numpy().item(), 5), (epoch * steps_one_epoch) + i)
+                    self.logger.add_scalar("Disc Loss", np.round(loss_gan.cpu().detach().numpy().item(), 3), (epoch * steps_one_epoch) + i)
+                checkpoint = {
+                    "vqgan":self.vqgan.state_dict(),
+                    "discriminator":self.discriminator.state_dict(),
+                    "opt_vq":self.opt_vq.state_dict(),
+                    "opt_disc":self.opt_disc.state_dict(),
+                }
+                torch.save(checkpoint, os.path.join("checkpoints", args.experiment_name, f"vqgan_epoch_{epoch}.pt"))
 
 
 if __name__ == '__main__':
@@ -133,18 +173,22 @@ if __name__ == '__main__':
     parser.add_argument('--save-img-rate', type=int, default=1000, help='How often to save images (default: 1000). In units of steps')
 
     parser.add_argument('--experiment-name', type=str, help='Name of experiment. This will be used to create a folder in results/ and checkpoints/')
+    parser.add_argument('--resume-exp', action="store_true", help='Name of experiment. This will be used to create a folder in results/ and checkpoints/')
 
     args = parser.parse_args()
 
-    # User should specify unique experiment name
-    i = 1
-    original_experiment_name = args.experiment_name
-    while os.path.exists(os.path.join("checkpoints", args.experiment_name)):
-        args.experiment_name = original_experiment_name + "_" + str(i)
-        i += 1
-    if i > 1:
-        print("Experiment name already exists. Changing experiment name to: ", args.experiment_name)
+    if args.resume_exp:
+        print("Resuming experiment: ", args.experiment_name)
+    else:
+        # User should specify unique experiment name
+        i = 1
+        original_experiment_name = args.experiment_name
+        while os.path.exists(os.path.join("checkpoints", args.experiment_name)):
+            args.experiment_name = original_experiment_name + "_" + str(i)
+            i += 1
+        if i > 1:
+            print("Experiment name already exists. Changing experiment name to: ", args.experiment_name)
 
-    print("Running experiment: ", args.experiment_name)
+        print("Running experiment: ", args.experiment_name)
 
     train_vqgan = TrainVQGAN(args)
