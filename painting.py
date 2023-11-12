@@ -9,6 +9,8 @@ from torchvision import utils as vutils
 from tqdm import tqdm
 import math
 import matplotlib.pyplot as plt
+import wandb
+import json
 
 class Painting:
 
@@ -67,6 +69,7 @@ class Painting:
             vutils.save_image(sample_image, os.path.join(full_path, f"original_image.jpg"))
             vutils.save_image(masked_image, os.path.join(full_path, f"masked_image.jpg"))
             vutils.save_image(inpainted_image, os.path.join(full_path, f"inpainted_image.jpg"))
+            
 
         print(f"Saved inpainting results to {self.args.inpainting_results_dir}")
 
@@ -77,6 +80,17 @@ class Painting:
         # TODO maybe don't need seperate function since we do the same thing as inpainting
         pass
 
+
+def checkpoint_path_to_config_path(path):
+
+    split_checkpoint_path = path.split("/")
+
+    config_path_li = split_checkpoint_path[:-3]
+    config_path_li.append("configs")
+    config_path_li.append(split_checkpoint_path[-2] + ".json")
+
+    config_path = "/".join(config_path_li)
+    return config_path
 
 if __name__ == '__main__':
 
@@ -89,31 +103,36 @@ if __name__ == '__main__':
 
 
     # NOTE: Maybe want to abstract into some external json we load so we can run different experiments or just as cmd line args
-    args = {
-        "latent_dim": 256,
-        "image_size": 64,
-        "num_codebook_vectors": 1024,
-        "patch_size":2,
-        "beta": 0.25,
-        "image_channels": 1,
-        "accum_grad": 10,
-        "n_layers": 24,
-        "dim": 768,
-        "hidden_dim": 3072,
 
-        "num_image_tokens": 1024,
-        "checkpoint_path": "/central/groups/mlprojects/pat/fanlin/checkpoints/original_pat_only_l2_patch2/vqgan_epoch_20.pt", # vqgan
-        "patch_size": 2,
+    parser = argparse.ArgumentParser(description="painting")
+    parser.add_argument("--transformer-checkpoint-path", type=str)
+    parser.add_argument("--dataset-path", type=str)
+    parser.add_argument("--inpainting-results-dir", type=str)
+    parser.add_argument("--num-inpainting-images", type=int, default=10)
 
-        # NOTE: the following args are custom to this painting task
-        "batch_size": 1,
-        "dataset_path": "/groups/mlprojects/pat/pat_np/original",
-        "transformer_checkpoint_path": "./checkpoints/pat_transformer_48/transformer_current.pt", # transformer
-        "inpainting_results_dir": "./results/inpainting_exps2",
-        "device": "cuda",
-        "num_inpainting_images": 10,
-    }
-    args = argparse.Namespace(**args)
+    args = parser.parse_args()
+    tmp_args = argparse.Namespace(**vars(args))
+
+    transformer_config_path = checkpoint_path_to_config_path(args.transformer_checkpoint_path)
+
+    with open(transformer_config_path, "r") as f:
+        json_args = json.load(f)
+        args = argparse.Namespace(**json_args)
+
+    args = argparse.Namespace(**json_args)
+
+    # merge args with tmp_args
+    args.transformer_checkpoint_path = tmp_args.transformer_checkpoint_path
+    args.dataset_path = tmp_args.dataset_path
+    args.inpainting_results_dir = tmp_args.inpainting_results_dir
+    args.num_inpainting_images = tmp_args.num_inpainting_images
+    
+    wandb.init(
+        project="pat_maskgit_inpainting",
+        
+        config=json_args
+    )
+
 
     # create the inpainting_results_dir if it doesn't exist
     os.makedirs(args.inpainting_results_dir, exist_ok=True)

@@ -22,12 +22,8 @@ cd ~/MaskGIT-PAT
 python training_transformer.py \
     --run-name pat_transformer \
     --dataset-path /groups/mlprojects/pat/pat_np/original \
-    --checkpoint-path /central/groups/mlprojects/pat/fanlin/checkpoints/original_pat_only_l2_patch2/vqgan_epoch_20.pt \
+    --checkpoint-path /central/groups/mlprojects/pat/fanlin/checkpoints/vq_original_pat_only_l2_code8/vqgan_epoch_150.pt \
     --batch-size 1 \
     --epochs 100000 \
-    --patch-size 2 \
-    --image-channels 1 \
-    --image-size 64 \
-    --num-image-tokens 1024 \
     --num-train-samples 10 \
     --disable-log-images
