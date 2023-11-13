@@ -18,6 +18,9 @@ class Painting:
         self.args = args
         self.model = VQGANTransformer(args).to(device=args.device)
         self.model.load_state_dict(torch.load(args.transformer_checkpoint_path))
+    
+    def normalize_image(self, x):
+        return 
 
     def plot_index_map(self, idxs_map, full_path):
         # Create a new figure
@@ -31,9 +34,10 @@ class Painting:
 
         for i, (idx_name, idx_grid) in enumerate(idxs_map.items()):
             # Normalize the indices and convert to RGB
-            normalized_indices = (idx_grid / torch.max(idx_grid))
-            image = plt.get_cmap('viridis')(normalized_indices)[:, :, :3]
-            image = image.reshape(32, 32, 3)
+            normalized_indices = idx_grid / (self.args.num_codebook_vectors + 2)
+            image = plt.get_cmap('turbo')(normalized_indices)[:, :, :3]
+            p = int(math.sqrt(self.args.num_image_tokens))
+            image = image.reshape(p, p, 3)
 
             # Add a subplot for this image
             ax = fig.add_subplot(num_rows, num_cols, i+1)
@@ -66,10 +70,47 @@ class Painting:
 
             self.plot_index_map(idxs_map, full_path)
 
-            vutils.save_image(sample_image, os.path.join(full_path, f"original_image.jpg"))
-            vutils.save_image(masked_image, os.path.join(full_path, f"masked_image.jpg"))
-            vutils.save_image(inpainted_image, os.path.join(full_path, f"inpainted_image.jpg"))
+            # vutils.save_image(sample_image, os.path.join(full_path, f"original_image.jpg"))
+            # vutils.save_image(masked_image, os.path.join(full_path, f"masked_image.jpg"))
+            # vutils.save_image(inpainted_image, os.path.join(full_path, f"inpainted_image.jpg"))
+
+            sample_image_squeezed = sample_image.squeeze(0)
+            masked_image_squeezed = masked_image.squeeze(0)
+            inpainted_image_squeezed = inpainted_image.squeeze(0)
+
+            def add_center_highlight(image, border_size=1, border_color=1.0):
+                # Assuming image is a single-channel grayscale image with shape [1, Height, Width]
+                
+                # Calculate the start and end indices for the center third
+                _, H, W = image.shape
+                start_idx = H // 3
+                end_idx = H - start_idx
+
+                # Create a copy of the image to draw the border
+                bordered_image = image.clone()
+
+                # Draw a border around the center third
+                bordered_image[:, start_idx-border_size:end_idx+border_size, start_idx-border_size:start_idx] = border_color
+                bordered_image[:, start_idx-border_size:end_idx+border_size, end_idx:end_idx+border_size] = border_color
+                bordered_image[:, start_idx-border_size:start_idx, start_idx-border_size:end_idx+border_size] = border_color
+                bordered_image[:, end_idx:end_idx+border_size, start_idx-border_size:end_idx+border_size] = border_color
+                
+                return bordered_image
             
+            def normalize_image(image):
+                # Normalize from [-1, 1] to [0, 1]
+                return (image + 1) / 2
+
+            sample_image_highlighted = normalize_image(add_center_highlight(sample_image_squeezed))
+            masked_image_highlighted = normalize_image(add_center_highlight(masked_image_squeezed))
+            inpainted_image_highlighted = normalize_image(add_center_highlight(inpainted_image_squeezed))
+
+            images = torch.cat([sample_image_highlighted, masked_image_highlighted, inpainted_image_highlighted], dim=2)
+
+            # Since now images are concatenated side by side, we can use nrow=1
+            grid = vutils.make_grid(images.unsqueeze(0), nrow=1, padding=2, pad_value=1.0)
+
+            vutils.save_image(grid, os.path.join(full_path, f"combined_image.jpg"))
 
         print(f"Saved inpainting results to {self.args.inpainting_results_dir}")
 
@@ -129,7 +170,6 @@ if __name__ == '__main__':
     
     wandb.init(
         project="pat_maskgit_inpainting",
-        
         config=json_args
     )
 

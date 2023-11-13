@@ -60,10 +60,12 @@ class TrainTransformer:
                     pbar.update(0)
                     self.logger.add_scalar("Cross Entropy Loss", np.round(loss.cpu().detach().numpy().item(), 4), (epoch * num_train_samples) + i)
                     wandb.log({"Cross Entropy Loss": np.round(loss.cpu().detach().numpy().item(), 4)}, step=(epoch * num_train_samples) + i)
-
+            
             if not args.disable_log_images:
                 idxs_map, sampled_imgs = self.model.log_images(imgs[0:1])
                 vutils.save_image(sampled_imgs.add(1).mul(0.5), os.path.join("results", args.run_name, f"{epoch}.jpg"), nrow=5)
+            
+            # self.model.log_custom_images(imgs[0:1], os.path.join("results", args.run_name, f"{epoch}_custom.jpg"))
            
             if epoch % args.ckpt_interval == 0:
                 torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, f"transformer_epoch_{epoch}.pt"))
