@@ -281,7 +281,8 @@ class VQGANTransformer(nn.Module):
         z_indices = z_indices.reshape(z_indices.shape[0], -1).to(torch.int64).to(self.args.device)
 
         # mask the same 1/3 portion in terms of x size
-        masked_image = self.create_masked_image(x, x_start=len(x) // 3, x_size=len(x) // 3, y_start=len(x) // 3, y_size=len(x) // 3)[0]
+        _, _, H, W = x.shape
+        masked_image = self.create_masked_image(x, x_start= W // 3, x_size= W // 3, y_start= H // 3, y_size= H // 3)[0]
                                                 
         inpainted_indices = self.sample_good(z_indices)
         inpainted_image = self.indices_to_image(inpainted_indices)
