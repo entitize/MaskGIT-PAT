@@ -8,7 +8,7 @@ import math
 from bidirectional_transformer import BidirectionalTransformer
 from vqgan import VQGAN
 import matplotlib.pyplot as plt
-
+from torchvision import utils as vutils
 
 _CONFIDENCE_OF_KNOWN_TOKENS = torch.Tensor([torch.inf]).to("cuda")
 
@@ -149,7 +149,9 @@ class VQGANTransformer(nn.Module):
         unknown_number_in_the_beginning = torch.sum(inputs == self.mask_token_id, dim=-1)
         gamma = self.gamma_func(mode)
         cur_ids = inputs  # [8, 257]
-        for t in range(T):
+        # for t in range(T):
+        t = 0
+        while (cur_ids == self.mask_token_id).any():
             logits = self.tokens_to_logits(cur_ids)  # call transformer to get predictions [8, 257, 1024]
             sampled_ids = torch.distributions.categorical.Categorical(logits=logits).sample()
 
@@ -173,6 +175,7 @@ class VQGANTransformer(nn.Module):
             # Masks tokens with lower confidence.
             cur_ids = torch.where(masking, self.mask_token_id, sampled_ids)
             # print((cur_ids == 8192).count_nonzero())
+            t += 1
 
         self.transformer.train()
         return cur_ids[:, 1:]
@@ -195,17 +198,57 @@ class VQGANTransformer(nn.Module):
         # create reconstruction
         x_rec = self.indices_to_image(z_indices)
 
+        # create inpainting middle region
+        masked_image, _ = self.create_masked_image(x, 10, 10, 10)
+        _, _, no_blend_image = self.inpainting(x, 10, 10, 10)
+
         log["input"] = x
         log["rec"] = x_rec
         log["half_sample"] = x_sample
         log["new_sample"] = x_new
-        return log, torch.concat((x, x_rec, x_sample, x_new))
+        log["masked_img"] = masked_image
+        log["no_blend_image"] = no_blend_image
+        return log, torch.concat((x, x_rec, x_sample, x_new, masked_image, no_blend_image, x))
+    
+
+    def plot_index_map(self, idxs_map, full_path):
+        # Create a new figure
+        fig = plt.figure(figsize=(10, 10))
+
+        # Calculate the number of rows and columns for the subplot grid
+        num_images = len(idxs_map)
+        num_cols = round(math.sqrt(num_images))
+        num_rows = num_images // num_cols
+        if num_images % num_cols: num_rows += 1
+
+        for i, (idx_name, idx_grid) in enumerate(idxs_map.items()):
+            # Normalize the indices and convert to RGB
+            normalized_indices = (idx_grid / torch.max(idx_grid))
+            image = plt.get_cmap('viridis')(normalized_indices)[:, :, :3]
+            image = image.reshape(32, 32, 3)
+
+            # Add a subplot for this image
+            ax = fig.add_subplot(num_rows, num_cols, i+1)
+            ax.imshow(image)
+            ax.set_title(idx_name)
+            ax.axis('off')
+
+        # Save the figure
+        plt.savefig(full_path)
+        plt.close(fig)
+
+    @torch.no_grad() 
+    def log_custom_images(self, x, full_path, mode="cosine"):
+
+        index_map, masked_image, inpainted_image = self.custom_inpainting(x)
+            
+        self.plot_index_map(index_map, full_path)
+
+        vutils.save_image(torch.cat((x, masked_image, inpainted_image)).add(1).mul(0.5), os.path.join(full_path, f"inpainted_image.jpg"), nrow=4)
 
     def indices_to_image(self, indices):
         p1 = p2 = int(math.sqrt(self.args.num_image_tokens))
-        # ix_to_vectors = self.vqgan.codebook.embedding(indices).reshape(indices.shape[0], p1, p2, self.args.image_size)
-        ix_to_vectors = self.vqgan.codebook.embedding(indices).reshape(indices.shape[0], p1, p2, self.args.latent_dim)
-        # ix_to_vectors = self.vqgan.quantize.embedding(indices).reshape(indices.shape[0], 16, 16, 256)
+        ix_to_vectors = self.vqgan.codebook.embedding(indices).reshape(indices.shape[0], p1, p2, -1)
         ix_to_vectors = ix_to_vectors.permute(0, 3, 1, 2)
         image = self.vqgan.decode(ix_to_vectors)
         return image
@@ -223,33 +266,35 @@ class VQGANTransformer(nn.Module):
         mask[:, :, x_start:x_start + x_size, y_start:y_start + y_size] = 0
         return image * mask, mask
     
+    @torch.no_grad()
     def custom_inpainting(self, x):
         # TODO: Mask on the indices, not image
         _, z_indices = self.encode_to_z(x)
         p = int(math.sqrt(self.args.num_image_tokens))
-        masked_z_indices = z_indices.reshape(z_indices.shape[0], p, p)
-
+        original_z_indices = z_indices.clone()
         # TODO: Make this customizable, currently masks center 1/3 of image
-        # masked_z_indices[:, p // 3:2 * p // 3, p // 3:2 * p // 3] = self.mask_token_id
 
-        # create a "half" sample
-        z_start_indices_half = z_indices[:, :z_indices.shape[1] // 2]
-        half_index_sample_indexes = self.sample_good(z_start_indices_half)
-        half_sample_image = self.indices_to_image(half_index_sample_indexes)
+        # first, reshape z_indices to be 16x16
+        z_indices = z_indices.reshape(z_indices.shape[0], p, p)
+        # mask the center 1/3 of the image
+        z_indices[:, p // 3:2 * p // 3, p // 3:2 * p // 3] = self.mask_token_id
+        z_indices = z_indices.reshape(z_indices.shape[0], -1).to(torch.int64).to(self.args.device)
 
-        # masked_z_indices = masked_z_indices.reshape(z_indices.shape[0], -1).to(torch.int64).to(self.args.device)
-        # masked_image = self.indices_to_image(masked_z_indices)
-        # inpainted_indices = self.sample_good(masked_z_indices)
-        # inpainted_image = self.indices_to_image(inpainted_indices)
+        # mask the same 1/3 portion in terms of x size
+        _, _, H, W = x.shape
+        masked_image = self.create_masked_image(x, x_start= W // 3, x_size= W // 3, y_start= H // 3, y_size= H // 3)[0]
+                                                
+        inpainted_indices = self.sample_good(z_indices)
+        inpainted_image = self.indices_to_image(inpainted_indices)
+
 
         index_map = {
-            "original": z_indices.cpu(),
-            # "masked": masked_z_indices,
-            # "inpainted": inpainted_indices,
-            "half_index_sample_indexes": half_index_sample_indexes.cpu(),
+            "original": original_z_indices.cpu(),
+            "masked": z_indices.cpu(),
+            "inpainted": inpainted_indices.cpu(),
         }
 
-        return index_map, half_sample_image, half_sample_image
+        return index_map, masked_image, inpainted_image
 
     def inpainting(self, image: torch.Tensor, x_start: int = 100, y_start: int = 100, size: int = 50, multi_mask=[]):
         device = self.args.device

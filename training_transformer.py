@@ -12,6 +12,7 @@ from lr_schedule import WarmupLinearLRSchedule
 from torch.utils.tensorboard import SummaryWriter
 import datetime
 import json
+import wandb
 
 
 class TrainTransformer:
@@ -39,11 +40,10 @@ class TrainTransformer:
 
     def train(self, args):
         train_dataset = load_data(args)
-        len_train_dataset = len(train_dataset)
-        step = args.start_from_epoch * len_train_dataset
+        num_train_samples = len(train_dataset) if args.num_train_samples == -1 else args.num_train_samples
+        step = args.start_from_epoch * num_train_samples
         for epoch in range(args.start_from_epoch+1, args.epochs+1):
             print(f"Epoch {epoch}:")
-            num_train_samples = len(train_dataset) if args.num_train_samples == -1 else args.num_train_samples
             # with tqdm(range(len(train_dataset))) as pbar:
             with tqdm(range(num_train_samples)) as pbar:
                 self.lr_schedule.step()
@@ -58,11 +58,14 @@ class TrainTransformer:
                     step += 1
                     pbar.set_postfix(Transformer_Loss=np.round(loss.cpu().detach().numpy().item(), 4))
                     pbar.update(0)
-                    self.logger.add_scalar("Cross Entropy Loss", np.round(loss.cpu().detach().numpy().item(), 4), (epoch * len_train_dataset) + i)
-
+                    self.logger.add_scalar("Cross Entropy Loss", np.round(loss.cpu().detach().numpy().item(), 4), (epoch * num_train_samples) + i)
+                    wandb.log({"Cross Entropy Loss": np.round(loss.cpu().detach().numpy().item(), 4)}, step=(epoch * num_train_samples) + i)
+            
             if not args.disable_log_images:
                 idxs_map, sampled_imgs = self.model.log_images(imgs[0:1])
                 vutils.save_image(sampled_imgs.add(1).mul(0.5), os.path.join("results", args.run_name, f"{epoch}.jpg"), nrow=5)
+            
+            # self.model.log_custom_images(imgs[0:1], os.path.join("results", args.run_name, f"{epoch}_custom.jpg"))
            
             if epoch % args.ckpt_interval == 0:
                 torch.save(self.model.state_dict(), os.path.join("checkpoints", args.run_name, f"transformer_epoch_{epoch}.pt"))
@@ -103,11 +106,11 @@ class TrainTransformer:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="VQGAN")
     parser.add_argument('--run-name', type=str)
-    parser.add_argument('--latent-dim', type=int, default=256, help='Latent dimension n_z.')
-    parser.add_argument('--image-size', type=int, default=256, help='Image height and width.)')
-    parser.add_argument('--num-codebook-vectors', type=int, default=1024, help='Number of codebook vectors.')
-    parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar.')
-    parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images.')
+    # parser.add_argument('--latent-dim', type=int, default=256, help='Latent dimension n_z.')
+    # parser.add_argument('--image-size', type=int, default=256, help='Image height and width.)')
+    # parser.add_argument('--num-codebook-vectors', type=int, default=1024, help='Number of codebook vectors.')
+    # parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar.')
+    # parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images.')
     parser.add_argument('--dataset-path', type=str, default='./data', help='Path to data.')
     parser.add_argument('--checkpoint-path', type=str, default=None, help='Path to checkpoint.')
     parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on.')
@@ -124,7 +127,8 @@ if __name__ == '__main__':
     parser.add_argument('--n-layers', type=int, default=24, help='Number of layers of transformer.')
     parser.add_argument('--dim', type=int, default=768, help='Dimension of transformer.')
     parser.add_argument('--hidden-dim', type=int, default=3072, help='Dimension of transformer.')
-    parser.add_argument('--num-image-tokens', type=int, default=256, help='Number of image tokens.')
+
+    # parser.add_argument('--num-image-tokens', type=int, default=256, help='Number of image tokens.')
 
     parser.add_argument('--use-custom-optimizer', action='store_true', help='Use custom optimizer.')
 
@@ -136,7 +140,27 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # make sure run-name is unique by looking at results dir
+    # The following reads the args from when the vqgan was trained
+    # This way we don't have to manually set the args
+    split_checkpoint_path = args.checkpoint_path.split("/")
+
+    config_path_li = split_checkpoint_path[:-3]
+    config_path_li.append("configs")
+    config_path_li.append(split_checkpoint_path[-2] + ".json")
+
+    config_path = "/".join(config_path_li)
+    with open(config_path, "r") as f:
+        config = json.load(f)
+
+        args.beta = config["beta"]
+        args.patch_size = config["patch_size"]
+        args.image_channels = config["image_channels"]
+        args.image_size = config["image_size"]
+        args.num_image_tokens = (args.image_size // args.patch_size) ** 2
+        args.latent_dim = config["latent_dim"]
+        args.num_codebook_vectors = config["num_codebook_vectors"]
+
+    # Make sure run-name is unique by looking at results dir
     i = 1
     original_run_name = args.run_name
     while os.path.exists(os.path.join("checkpoints", args.run_name)):
@@ -172,5 +196,10 @@ if __name__ == '__main__':
         args_dict["time"] = str(datetime.datetime.now())
         json.dump(args_dict, f, indent=4)
     
+        wandb.init(
+            project="maskgit_training_transformer",
+            config = args_dict,
+        )
+
     train_transformer = TrainTransformer(args)
     

@@ -19,6 +19,12 @@ module load cuda/11.8
 
 cd ~/MaskGIT-PAT
 
-# NOTE(@kai): the training_vqgan script already uses cuda by default
+export CUDA_LAUNCH_BLOCKING=1
+export TORCH_USE_CUDA_DSA=1
 
-python painting.py
+
+python painting.py \
+    --transformer-checkpoint-path ./checkpoints/pat_transformer_62/transformer_current.pt \
+    --dataset-path /groups/mlprojects/pat/pat_np/original \
+    --inpainting-results-dir ./results/inpainting_exps5 \
+    --num-inpainting-images 20
