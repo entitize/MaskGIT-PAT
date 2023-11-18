@@ -8,7 +8,7 @@
 #SBATCH --nodes=1   # number of nodes
 #SBATCH --gres=gpu:1 # number of GPUs
 #SBATCH --mem-per-cpu=5G # memory per CPU core
-#SBATCH -J "pat_cnn_pat_sa_24"   # job name
+#SBATCH -J "pat_cnn_sa_real"   # job name
 
 # LOAD MODULES, INSERT CODE, AND RUN YOUR PROGRAMS HERE
 
@@ -19,15 +19,17 @@ module load cuda/11.8
 module load gcc/9.2.0
 module load clang/16.0.4
 
+export CUDA_VISIBLE_DEVICES=0
+
 cd ~/MaskGIT-PAT
 
 # NOTE(@kai): the training_vqgan script already uses cuda by default
 
 python cnn_inpainting.py \
-    --epochs 50 \
-    --experiment-name pat_cnn_pat_sa_24 \
-    --dataset-path /groups/mlprojects/pat/pat_cnn \
+    --epochs 100 \
+    --experiment-name pat_cnn_sa_real \
+    --dataset-path /groups/mlprojects/pat/pat_norm_crop \
     --image-channels 1 \
     --image-size 64 \
-    --spatial_aliasing
+    --spatial-aliasing
     # --experiment-name cnn_inpainting_check_versions \
