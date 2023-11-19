@@ -253,36 +253,40 @@ class VQGANTransformer(nn.Module):
         image = self.vqgan.decode(ix_to_vectors)
         return image
     
-    @staticmethod
-    def create_multi_masked_image(image: torch.Tensor, masks: list):
-        mask = torch.ones_like(image, dtype=torch.int)
-        for x_start, y_start, x_size, y_size in masks:
-            mask[:, :, x_start:x_start + x_size, y_start:y_start + y_size] = 0
-        return image * mask, mask
 
     @staticmethod
-    def create_masked_image(image: torch.Tensor, x_start: int = 100, y_start: int = 100, x_size: int = 50, y_size: int = 50):
+    def create_masked_image(image: torch.Tensor, mask_array, p):
         mask = torch.ones_like(image, dtype=torch.int)
-        mask[:, :, x_start:x_start + x_size, y_start:y_start + y_size] = 0
-        return image * mask, mask
+        for row in mask_array:
+            x_min, x_max, y_min, y_max = row
+            mask[:, :, y_min:y_max, x_min:x_max] = 0
+        average_color = image.mean()
+        masked_image = image * mask
+        masked_image = torch.where(masked_image == 0, average_color, masked_image)
+        return masked_image, mask
     
     @torch.no_grad()
-    def custom_inpainting(self, x):
-        # TODO: Mask on the indices, not image
-        _, z_indices = self.encode_to_z(x)
-        p = int(math.sqrt(self.args.num_image_tokens))
-        original_z_indices = z_indices.clone()
-        # TODO: Make this customizable, currently masks center 1/3 of image
-
-        # first, reshape z_indices to be 16x16
-        z_indices = z_indices.reshape(z_indices.shape[0], p, p)
-        # mask the center 1/3 of the image
-        z_indices[:, p // 3:2 * p // 3, p // 3:2 * p // 3] = self.mask_token_id
-        z_indices = z_indices.reshape(z_indices.shape[0], -1).to(torch.int64).to(self.args.device)
-
-        # mask the same 1/3 portion in terms of x size
+    def custom_inpainting(self, x, mask_array):
+        # mask images first to prevent leakage
         _, _, H, W = x.shape
-        masked_image = self.create_masked_image(x, x_start= W // 3, x_size= W // 3, y_start= H // 3, y_size= H // 3)[0]
+        p = int(math.sqrt(self.args.num_image_tokens))
+        masked_image, mask = self.create_masked_image(x, mask_array, p)
+
+        # encode to z_indices
+        _, z_indices = self.encode_to_z(masked_image)
+        _, original_z_indices = self.encode_to_z(x)
+        _, _, H, _ = x.shape
+        z_indices = z_indices.reshape(z_indices.shape[0], p, p)
+
+        q = H//p
+        # Apply the mask to the tokens
+        mask_patches = mask.unfold(2, q, q).unfold(3, q, q)
+        mask_patches = mask_patches.contiguous().view(1, 1, p, p, -1)
+        mask_patches = mask_patches.float().mean(dim=-1)
+        mask_tokens = mask_patches.squeeze() 
+        mask_tokens = mask_tokens.unsqueeze(0).repeat(z_indices.shape[0], 1, 1) 
+        z_indices[mask_tokens < 0.7] = self.mask_token_id
+        z_indices = z_indices.reshape(z_indices.shape[0], -1).to(torch.int64).to(self.args.device)
                                                 
         inpainted_indices = self.sample_good(z_indices)
         inpainted_image = self.indices_to_image(inpainted_indices)
