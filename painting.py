@@ -12,7 +12,6 @@ import math
 import matplotlib.pyplot as plt
 import wandb
 import json
-from reconstruction import reconstruct
 
 class Painting:
 
@@ -115,20 +114,19 @@ class Painting:
         print("🎉🎉🎉")
 
 
-    def limited_view(self, num_transducers, filename="limited_view"):
+    def spatial_aliasing(self, num_transducers, filename="spatial_aliasing"):
         dataset = load_data(self.args)
         dataset = iter(dataset)
         sample_image = next(dataset).to(device=self.args.device)
         image_size = sample_image.shape[-1]
-        # num_transducers = self.args.num_transducers
-        mask_width = image_size//num_transducers
-        mask_array = np.zeros((num_transducers//2, 4),dtype=int)
-        for i in range(num_transducers//2):
-            mask_array[i]=[(2*i+1)*mask_width,(2*i+2)*mask_width,0,image_size]
+        mask_width = image_size/(num_transducers*2)
+        mask_array = np.zeros((num_transducers, 4),dtype=int)
+        for i in range(num_transducers):
+            mask_array[i]=[int((2*i+0.5)*mask_width),int((2*i+1.5)*mask_width),0,image_size]
         self.run_inpainting(dataset, mask_array, filename)
 
-    def spatial_aliasing(self):
-        self.limited_view(3, "spatial_aliasing")
+    def limited_view(self):
+        self.spatial_aliasing(1, "limited_view")
 
 
 
@@ -191,8 +189,8 @@ if __name__ == '__main__':
 
     # NOTE: Maybe want to abstract as cmd line args
     painting = Painting(args)
-    painting.limited_view(args.num_transducers)
-    painting.spatial_aliasing()
+    painting.spatial_aliasing(args.num_transducers)
+    painting.limited_view()
 
 
 
