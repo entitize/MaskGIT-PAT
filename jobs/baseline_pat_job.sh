@@ -22,8 +22,10 @@ cd ~/MaskGIT-PAT
 # NOTE(@kai): the training_vqgan script already uses cuda by default
 
 python training_vqgan.py \
-    --dataset-path /groups/mlprojects/pat/pat_np/original \
+    --dataset-path /groups/mlprojects/pat/pat_norm_crop/train \
     --batch-size 4 \
-    --experiment-name pat_np_baseline \
+    --image-size 64 \
+    --patch-size 4 \
+    --experiment-name pat_patch_size_4_split \
     --save-img-rate 1000 \
     --image-channels 1

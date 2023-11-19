@@ -33,14 +33,19 @@ class ImagePaths(Dataset):
     def preprocess_image(self, image_path):
         if image_path.endswith("npy"):
             image = np.load(image_path)
+            image = np.squeeze(image)
             assert image.shape[1] - self.size >= 0 and image.shape[0] - self.size >= 0, f"Image Size {self.size} is too large for images {image.shape}"
-            x = random.randint(0, image.shape[1] - self.size)
-            y = random.randint(0, image.shape[0] - self.size)
-            image = image[y:y+self.size, x:x+self.size]
+            # random crop
+            if (image.shape[1] - self.size > 0 or image.shape[0] - self.size > 0):
+                x = random.randint(0, image.shape[1] - self.size)
+                y = random.randint(0, image.shape[0] - self.size)
+                image = image[y:y+self.size, x:x+self.size]
+            # normalize
             maxValue = np.max(image)
             minValue = np.min(image)
             image = (image - minValue) * 2 / (maxValue - minValue) - 1.0
             image = np.expand_dims(image.astype(np.float32), axis=2)
+            image = image.astype(np.float32)
         else:
             image = Image.open(image_path)
             if not image.mode == "RGB":
