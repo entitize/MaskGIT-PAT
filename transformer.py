@@ -247,6 +247,7 @@ class VQGANTransformer(nn.Module):
         vutils.save_image(torch.cat((x, masked_image, inpainted_image)).add(1).mul(0.5), os.path.join(full_path, f"inpainted_image.jpg"), nrow=4)
 
     def indices_to_image(self, indices):
+        indices = indices.clone()
         p1 = p2 = int(math.sqrt(self.args.num_image_tokens))
         ix_to_vectors = self.vqgan.codebook.embedding(indices).reshape(indices.shape[0], p1, p2, -1)
         ix_to_vectors = ix_to_vectors.permute(0, 3, 1, 2)
@@ -255,7 +256,7 @@ class VQGANTransformer(nn.Module):
     
 
     @staticmethod
-    def create_masked_image(image: torch.Tensor, mask_array, p):
+    def create_masked_image(image: torch.Tensor, mask_array):
         mask = torch.ones_like(image, dtype=torch.int)
         for row in mask_array:
             x_min, x_max, y_min, y_max = row
@@ -270,7 +271,7 @@ class VQGANTransformer(nn.Module):
         # mask images first to prevent leakage
         _, _, H, W = x.shape
         p = int(math.sqrt(self.args.num_image_tokens))
-        masked_image, mask = self.create_masked_image(x, mask_array, p)
+        masked_image, mask = self.create_masked_image(x, mask_array)
 
         # encode to z_indices
         _, z_indices = self.encode_to_z(masked_image)
