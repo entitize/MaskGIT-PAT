@@ -21,6 +21,7 @@ import cv2
 import numpy as np
 from PIL import Image
 from sklearn.model_selection import train_test_split
+from skimage.transform import resize
 # NOTE: 'module load gcc/9.2.0' is necessary for PIL to work
 
 # import matplotlib.pyplot as plt
@@ -221,10 +222,31 @@ if __name__ == '__main__':
 
     print(tf.__version__)
 
+    def load_image(f, subdir):
+        path = os.path.join(args.dataset_path, subdir, f)
+        if f.endswith('.npy'):
+           image = np.load(path) * 255
+           if image.shape[0] != args.image_size:
+            image = resize(image, (args.image_size, args.image_size))
+           return (image)
+        # elif f.endswith('.jpg'):
+        else:
+            image = Image.open(path)
+            if not image.mode == "RGB":
+                image = image.convert("RGB")
+            image = image.resize((args.image_size, args.image_size))
+            return np.array(image)
+            # image = self.preprocessor(image=image)["image"]
+            # image = (image / 127.5 - 1.0).astype(np.float32)
+            # image = image.transpose(2, 0, 1)
+
+
     if args.dataset_path != 'cifar':
-        x_train = [(np.load(os.path.join(args.dataset_path, 'train', f)) * 255) for f in os.listdir(os.path.join(args.dataset_path, 'train')) if f.endswith('.npy')]
-        x_val = [(np.load(os.path.join(args.dataset_path, 'val', f)) * 255) for f in os.listdir(os.path.join(args.dataset_path, 'val')) if f.endswith('.npy')]
-        x_test = [(np.load(os.path.join(args.dataset_path, 'test', f)) * 255) for f in os.listdir(os.path.join(args.dataset_path, 'test')) if f.endswith('.npy')]
+        x_train = [load_image(f, 'train') for f in os.listdir(os.path.join(args.dataset_path, 'train')) if f.endswith('.npy') or f.endswith('.jpg')]
+        x_val = [load_image(f, 'val') for f in os.listdir(os.path.join(args.dataset_path, 'val')) if f.endswith('.npy') or f.endswith('.jpg')]
+        x_test = [load_image(f, 'test') for f in os.listdir(os.path.join(args.dataset_path, 'test')) if f.endswith('.npy') or f.endswith('.jpg')]
+
+
 
         x_train = np.array(x_train).astype('uint8')
         x_val = np.array(x_val).astype('uint8')
