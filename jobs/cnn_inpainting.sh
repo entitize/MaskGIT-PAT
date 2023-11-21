@@ -8,7 +8,7 @@
 #SBATCH --nodes=1   # number of nodes
 #SBATCH --gres=gpu:1 # number of GPUs
 #SBATCH --mem-per-cpu=5G # memory per CPU core
-#SBATCH -J "pat_cnn_sa_real"   # job name
+#SBATCH -J "pat_cnn_lv_real"   # job name
 
 # LOAD MODULES, INSERT CODE, AND RUN YOUR PROGRAMS HERE
 
@@ -27,9 +27,9 @@ cd ~/MaskGIT-PAT
 
 python cnn_inpainting.py \
     --epochs 100 \
-    --experiment-name pat_cnn_sa_real \
+    --experiment-name pat_cnn_lv_real \
     --dataset-path /groups/mlprojects/pat/pat_norm_crop \
     --image-channels 1 \
     --image-size 64 \
-    --spatial-aliasing
+    --limited-view
     # --experiment-name cnn_inpainting_check_versions \

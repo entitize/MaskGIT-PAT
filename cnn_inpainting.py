@@ -95,7 +95,7 @@ class createAugment(keras.utils.Sequence):
     elif self.mask_type == "sa":
         # #   mask[:]
         # spatial aliasing masking - 1-pixel wide unmasked vertical line every m columns
-        mask = np.full((64,64, 1), 0, np.uint8)
+        mask = np.full((self.dim[0],self.dim[1],self.n_channels), 0, np.uint8)
         thickness = np.random.randint(2, 5)
         mask[:, ::thickness, :]= 255
     else:
@@ -203,7 +203,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
 if __name__ == '__main__':
     print('[INFO]', tf.config.experimental.list_physical_devices('GPU'))
-    parser = argparse.ArgumentParser(description="VQGAN")
+    parser = argparse.ArgumentParser(description="CNN")
     parser.add_argument('--image-size', type=int, default=32, help='Image height and width (default: 32)')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='cifar', help='Path to data (default: uses cifar dataset)')
