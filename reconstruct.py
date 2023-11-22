@@ -513,7 +513,7 @@ if __name__ == '__main__':
     # print(f"Anorm = {Anorm}")
 
     print("Load Image")
-    data = scipy.io.loadmat('/central/groups/mlprojects/pat/PAT_dataset/70/img.mat')
+    data = scipy.io.loadmat('/central/groups/mlprojects/pat/PAT_dataset/360/img.mat')
     I_gt = data['img']
 
     x_gt = I_gt.reshape(M * N)
@@ -571,31 +571,35 @@ if __name__ == '__main__':
     # plt.imshow(S_lv)
     # plt.axis('off')
 
-    masked = np.load('/central/groups/mlprojects/pat/cnn_spatial_aliasing/masked/signal_70.npy')
+    masked = np.load('/central/groups/mlprojects/pat/cnn_spatial_aliasing/masked/signal_360.npy')
     masked = np.squeeze(masked).T
-    S_masked = np.zeros((imgSize//3+1, imgSize));
-    S_masked[:, :] = masked[::3, :]
-    S_masked = S_masked.reshape((imgSize//3+1) * imgSize)
+    S_masked = np.zeros((imgSize//2, imgSize));
+    S_masked[:, :] = masked[::2, :]
+    S_masked = S_masked.reshape((imgSize//2) * imgSize)
     S_masked = S_masked * (globalMax - globalMin) + globalMin
     print(f"S_masked min: {S_masked.min()}, max: {S_masked.max()}")
     fig = plt.figure()
-    plt.imshow((S_masked.reshape((imgSize//3+1, imgSize)) - globalMin).T / (globalMax - globalMin))
+    plt.imshow((S_masked.reshape((imgSize//2, imgSize)) - globalMin).T / (globalMax - globalMin))
     plt.title("Cropped Masked")
     fig.savefig("m_masked.png")
     
     smallA_crop = A_crop.reshape((M, N, imgSize, imgSize))
-    A_masked = np.zeros((M, N, imgSize//3+1, imgSize))
-    A_masked[:,:,:,:] = smallA_crop[:,:,::3,:]
-    A_masked = A_masked.reshape((M* N, (imgSize//3+1) * imgSize))    
+    A_masked = np.zeros((M, N, imgSize//2, imgSize))
+    A_masked[:,:,:,:] = smallA_crop[:,:,::2,:]
+    A_masked = A_masked.reshape((M* N, (imgSize//2) * imgSize))    
 
-    inpainted_denorm = np.load('/central/groups/mlprojects/pat/cnn_spatial_aliasing/inpainted_denorm/signal_70.npy')
+    inpainted_denorm = np.load('/central/groups/mlprojects/pat/cnn_spatial_aliasing/inpainted_denorm/signal_360.npy')
     inpainted_denorm = np.squeeze(inpainted_denorm).T.reshape((imgSize * imgSize))
     
-    inpainted_orig = np.load('/central/groups/mlprojects/pat/cnn_spatial_aliasing/inpainted_orig/signal_70.npy')
+    inpainted_orig = np.load('/central/groups/mlprojects/pat/cnn_spatial_aliasing/inpainted_orig/signal_360.npy')
     inpainted_orig = np.squeeze(inpainted_orig).T.reshape((imgSize * imgSize))
     inpainted_orig = inpainted_orig * (globalMax - globalMin) + globalMin
     assert (inpainted_denorm == inpainted_orig).all(), "Inpainted both should be the same"
-    print(f"Inpainted min: {inpainted_denorm.min()}, max: {inpainted_orig.max()}")
+    print(f"Inpainted min: {inpainted_denorm.min()}, max: {inpainted_denorm.max()}")
+    fig = plt.figure()
+    plt.imshow((inpainted_denorm.reshape((imgSize, imgSize)).T - globalMin) / (globalMax - globalMin))
+    plt.title("Inpainted")
+    fig.savefig("m_inpainted.png")
     
     Iter = 100
     Iter_sub = 1000
