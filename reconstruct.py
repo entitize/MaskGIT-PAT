@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 import scipy
 import json
 import argparse
+import cv2
 from tqdm import tqdm
 
 def isInRange(theta, theta1, theta2):
@@ -446,47 +447,6 @@ def reconImageFISTA(A, b, M, N, Lambda, L, Iter, Iter_sub):
     # print("The loss function is %f, Residule is %f, TV is %f" %(Loss[k], Res, TV))
   return (I, Loss)
 
-
-def reconImageFISTABatched(A, b, M, N, frame_num, Lambda, L, Iter, Iter_sub):
-
-  T = 1
-  #Loss = np.zeros(Iter)
-  x = np.zeros((M * N, frame_num))
-  y = np.zeros((M * N, frame_num))
-  I = np.zeros((M, N, frame_num))
-  for k in tqdm(range(0, Iter), desc="Recon Image FISTA Batched"):
-    # print("==========Batch FISTA iteration number %d / %d==========" %(k, Iter))
-    T_pre = T
-    x_pre = x
-    # Compute x = x - 2 / L * AT(Ax - b)
-    #Res = np.sum((np.dot(A, y) - b) ** 2, axis=None)
-    #print("Before gradient step the Residule is %f" %(Res))
-    y = y - (2 / L) * np.transpose(A) @ (A @ y - b)
-    #Res = np.sum((np.dot(A, y) - b) ** 2, axis=None)
-    #print("After gradient step the Residule is %f" %(Res))
-
-    # Compute x = TVdenoise(x)
-    I = y.reshape(N, M, frame_num)
-    #TV = totalVariationImage(I)
-    #print("Before TV denoising TV is %f" %(TV))
-    I = proximalTV(I, Lambda * 2 / L, Iter_sub)
-    #TV = totalVariationImage(I)
-    #print("After TV denoising TV is %f" %(TV))
-    x = I.reshape(N * M, frame_num)
-
-    # Do FISTA acceleration
-    T = (1 + np.sqrt(1 + 4 * T**2)) / 2
-    y = x + (T_pre - 1) / T * (x - x_pre)
-
-    #I = x.reshape(N, M)
-    #Res = np.sum((np.dot(A, x) - b) ** 2, axis=None)
-    #TV = totalVariationImage(I)
-    #Loss[k] = Res + 2 * Lambda * TV
-    #print("The loss function is %f, Residule is %f, TV is %f" %(Loss[k], Res, TV))
-  #return (I, Loss)
-  return I
-
-
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Reconstruct")
@@ -502,7 +462,7 @@ if __name__ == '__main__':
     parser.add_argument('--inpainted-denorm-dir', type=str, default='/central/groups/mlprojects/pat/cnn_spatial_aliasing/inpainted_denorm/', help='Directory of inpainted signals')
 
     parser.add_argument('--A-location', type=str, default="/groups/mlprojects/pat/A/A.pickle", help='Location of A matrix pickle')
-    parser.add_argument('--dpi', type=int, default=1000, help='DPI of the saved images')
+    parser.add_argument('--dpi', type=int, default=700, help='DPI of the saved images')
 
     args = parser.parse_args()
 
@@ -634,29 +594,31 @@ if __name__ == '__main__':
       (A_crop, inpainted_denorm, "Inpainted")
     ]
 
-    # Put all the I's in one figure
     Is = []
     for scenario in scenarios:
       I = reconImageFISTA(np.transpose(scenario[0]), scenario[1], M, N, Lambda, L, Iter, Iter_sub)[0]
-
-      # TODO(kai): Currently the batched is not working due to dimension error
-      # b_batch = np.tile(b[:, np.newaxis], 10)
-      # test = reconImageFISTABatched(A, b_batch, M, N, 10, Lambda, L, Iter, Iter_sub)
 
       Is.append((scenario[2], I))
     
     # The top 4 are the ms in the order as ground truth, cropped, cropped masked, inpainted
     # The bottom 4 are the Is in the same order.
+    num_cols = max(len(ms), len(Is))
+    num_rows = 2
     fig = plt.figure()
     for i, (title, image) in enumerate(ms, start=1):
-      ax = fig.add_subplot(2, 4, i)
+      ax = fig.add_subplot(num_rows, num_cols, i)
       ax.imshow(image)
-      ax.set_title(title, fontsize=7)
+      ax.set_title(title, fontsize=10)
     for i, (title, image) in enumerate(Is, start=5):
-      ax = fig.add_subplot(2, 4, i)
+      ax = fig.add_subplot(num_rows, num_cols, i)
       ax.imshow(image)
-      ax.set_title(title, fontsize=7)
-    
+      # Get PSNR between image and the cropped ground truth
+      psnr = cv2.PSNR(image, Is[1][1], R=1)
+      if i == 6:
+        ax.set_title(title, fontsize=10)
+      else:
+        ax.set_title(f"{title} (PSNR: {psnr:.2f})", fontsize=10)
+
     os.makedirs(f"{args.results_dir}/m_and_I", exist_ok=True)
     fig.set_size_inches(18.5, 10.5)
     fig.savefig(f"{args.results_dir}/m_and_I/{args.signal_num}.png", dpi=args.dpi)
