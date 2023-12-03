@@ -24,8 +24,8 @@ export TORCH_USE_CUDA_DSA=1
 
 
 python painting.py \
-    --transformer-checkpoint-path /groups/mlprojects/pat/kai/checkpoints/pat_transformer_62/transformer_current.pt \
-    --dataset-path /groups/mlprojects/pat/pat_norm_crop/test \
+    --transformer-checkpoint-path ./checkpoints/transformer_landscape/transformer_epoch_500.pt \
+    --dataset-path /groups/mlprojects/pat/landscape \
     --inpainting-results-dir ./results/inpainting_exps \
     --num-transducers 8 \
     --num-inpainting-images 5
