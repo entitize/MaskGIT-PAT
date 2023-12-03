@@ -451,14 +451,10 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Reconstruct")
    
-
-    parser.add_argument('--r-ring', type=float, default=0.11, help='')
-    
     parser.add_argument('--results-dir', type=str, help='Where to save the results', default='./results/reconstruct')
     parser.add_argument('--signal-num', type=int, help='Specify a signal number. Otherwise, all signals will be used', default=360)
 
     parser.add_argument('--pat-dataset-dir', type=str, default='/central/groups/mlprojects/pat/PAT_dataset/', help='Directory of PAT dataset')
-    parser.add_argument('--masked-dir', type=str, default='/central/groups/mlprojects/pat/cnn_spatial_aliasing/masked/', help='Directory of masked signals')
     parser.add_argument('--inpainted-denorm-dir', type=str, default='/central/groups/mlprojects/pat/cnn_spatial_aliasing/inpainted_denorm/', help='Directory of inpainted signals')
 
     parser.add_argument('--A-location', type=str, default="/groups/mlprojects/pat/A/A.pickle", help='Location of A matrix pickle')
