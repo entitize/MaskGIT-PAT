@@ -6,4 +6,5 @@ slurm*
 runs
 configs
 wandb
+wandb_old
 cnn
