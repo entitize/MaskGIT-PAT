@@ -74,7 +74,7 @@ class createAugment(keras.utils.Sequence):
     elif self.mask_type == "sa":
         # #   mask[:]
         # spatial aliasing masking - 1-pixel wide unmasked vertical line every m columns
-        mask = np.full((64,64, 1), 0, np.uint8)
+        mask = np.full((self.dim[0],self.dim[1],self.n_channels), 0, np.uint8)
         thickness = np.random.randint(2, 5)
         mask[:, ::thickness, :]= 255
     else:

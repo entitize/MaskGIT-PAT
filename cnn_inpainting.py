@@ -24,11 +24,6 @@ from sklearn.model_selection import train_test_split
 from skimage.transform import resize
 # NOTE: 'module load gcc/9.2.0' is necessary for PIL to work
 
-# import matplotlib.pyplot as plt
-# get_ipython().run_line_magic('matplotlib', 'inline')
-# from mpl_toolkits.axes_grid1 import ImageGrid
-
-
 
 # #### Data Generator with Patch Augmentation
 ## Ref: https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly.
@@ -75,22 +70,27 @@ class createAugment(keras.utils.Sequence):
       image_copy = self.X[idx].copy()
 
       ## Get mask associated to that image
-      masked_image = self.__createMask(image_copy)
-
-      if self.n_channels == 1:
-        # convert from 2D to 3D
-        X_batch[i,] = tf.expand_dims(masked_image/255, axis=-1)
+      if self.mask_type is None:
+        X_batch[i,] = tf.expand_dims(self.X[idx], axis=-1)
+        y_batch[i] = tf.expand_dims(self.y[idx], axis=-1)
+        image = X_batch[i,]
       else:
-        X_batch[i,] = masked_image/255
-      y_batch[i] = self.y[idx]/255
+        masked_image = self.__createMask(image_copy)
+
+        if self.n_channels == 1:
+            # convert from 2D to 3D
+            X_batch[i,] = tf.expand_dims(masked_image/255, axis=-1)
+        else:
+            X_batch[i,] = masked_image/255
+        y_batch[i] = self.y[idx]/255
     return X_batch, y_batch
 
   def __createMask(self, img):
     ## Prepare masking matrix
     if self.mask_type == "lv":
-      # limited view masking - rectangle 1/3 the width of the image, centered in the middle
+      # limited view masking - rectangle 1/2 the width of the image, centered in the middle
       mask = np.full((self.dim[0],self.dim[1],self.n_channels), 255, np.uint8)
-      w = self.dim[0] // 3
+      w = self.dim[0] // 2
       x = self.dim[0] // 2
       cv2.line(mask,(x,0),(x,self.dim[1]),(1,1,1),w)
     elif self.mask_type == "sa":
@@ -171,7 +171,7 @@ class PredictionLogger(tf.keras.callbacks.Callback):
         super(PredictionLogger, self).__init__()
 
     def save_wandb(self, generator, name):
-        sample_idx = 42
+        sample_idx = 1
         sample_images, sample_labels = generator[sample_idx]
 
         images = []
@@ -208,6 +208,7 @@ if __name__ == '__main__':
     parser.add_argument('--image-size', type=int, default=32, help='Image height and width (default: 32)')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='cifar', help='Path to data (default: uses cifar dataset)')
+    parser.add_argument('--labels-path', type=str, nargs='?', help='Path to labels for dataset (optional; if not provided, will use masking on dataset-path)')
     parser.add_argument('--batch-size', type=int, default=32, help='Input batch size for training (default: 32)')
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train (default: 50)')
     parser.add_argument('--experiment-name', type=str, help='Name of experiment. This will be used to create a folder in results/ and checkpoints/')
@@ -217,15 +218,16 @@ if __name__ == '__main__':
     group.add_argument('--limited-view', action='store_true', help='This will use a square mask instead of random stroke masks')
     group.add_argument('--spatial-aliasing', action='store_true', help='This will mimic spatial aliasing instead of random stroke masks')
 
-
     args = parser.parse_args()
 
     print(tf.__version__)
 
-    def load_image(f, subdir):
-        path = os.path.join(args.dataset_path, subdir, f)
+    def load_image(f, path, convert_int=True):
+        # path = os.path.join(args.dataset_path, subdir, f)
         if f.endswith('.npy'):
-           image = np.load(path) * 255
+           image = np.load(path)
+           if convert_int:
+              image = image * 255
            if image.shape[0] != args.image_size:
             image = resize(image, (args.image_size, args.image_size))
            return (image)
@@ -236,21 +238,83 @@ if __name__ == '__main__':
                 image = image.convert("RGB")
             image = image.resize((args.image_size, args.image_size))
             return np.array(image)
-            # image = self.preprocessor(image=image)["image"]
-            # image = (image / 127.5 - 1.0).astype(np.float32)
-            # image = image.transpose(2, 0, 1)
+
+    if args.labels_path is not None:
+        x_train = []
+        x_val = []
+        x_test = []
+
+        y_train = []
+        y_val = []
+        y_test = []
+
+        for f in os.listdir(os.path.join(args.dataset_path, 'train')):
+           if f.endswith('.npy') or f.endswith('.jpg'):
+              x_train.append(load_image(f, os.path.join(args.dataset_path, 'train', f), convert_int=False))
+              y_train.append(load_image(f, os.path.join(args.labels_path, 'train', f), convert_int=False))
+        for f in os.listdir(os.path.join(args.dataset_path, 'val')):
+           if f.endswith('.npy') or f.endswith('.jpg'):
+              x_val.append(load_image(f, os.path.join(args.dataset_path, 'val', f), convert_int=False))
+              y_val.append(load_image(f, os.path.join(args.labels_path, 'val', f), convert_int=False))
+        for f in os.listdir(os.path.join(args.dataset_path, 'test')):
+           if f.endswith('.npy') or f.endswith('.jpg'):
+              x_test.append(load_image(f, os.path.join(args.dataset_path, 'test', f), convert_int=False))
+              y_test.append(load_image(f, os.path.join(args.labels_path, 'test', f), convert_int=False))
+
+        x_train = np.array(x_train)
+        x_val = np.array(x_val)
+        x_test = np.array(x_test)
+
+        y_train = np.array(y_train)
+        y_val = np.array(y_val)
+        y_test = np.array(y_test)
+
+        print('y_train shape:', y_train.shape)
+        print('y_val shape:', y_val.shape)
+        print('y_test shape:', y_test.shape)
+        print(y_train.shape[0], 'y train samples')
+        print(y_val.shape[0], 'y val samples')
+        print(y_test.shape[0], 'y test samples')
+
+        ## Save examples of what the masking looks like
+        sample_idx = 1 ## Change this to see different batches
+        masked = x_train[sample_idx]
+        label = y_train[sample_idx]
+
+        fig = plt.figure(figsize=(16., 8.))
+        grid = ImageGrid(fig, 111,  # similar to subplot(111)
+                        nrows_ncols=(1, 2),  # creates 4x8 grid of axes
+                        axes_pad=0.3,  # pad between axes in inch.
+                        )
+        for ax, image in zip(grid, [masked, label]):
+            ax.imshow(image, cmap='gray', vmin=0, vmax=1)
+            ax.imshow(image, cmap='gray', vmin=0, vmax=1)
+        os.makedirs("cnn", exist_ok=True)
+        fig.savefig(f'cnn/preaugment_cnn_masks_{args.experiment_name}.png')
 
 
-    if args.dataset_path != 'cifar':
-        x_train = [load_image(f, 'train') for f in os.listdir(os.path.join(args.dataset_path, 'train')) if f.endswith('.npy') or f.endswith('.jpg')]
-        x_val = [load_image(f, 'val') for f in os.listdir(os.path.join(args.dataset_path, 'val')) if f.endswith('.npy') or f.endswith('.jpg')]
-        x_test = [load_image(f, 'test') for f in os.listdir(os.path.join(args.dataset_path, 'test')) if f.endswith('.npy') or f.endswith('.jpg')]
-
-
+        traingen = createAugment(x_train, y_train, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=None)
+        valgen = createAugment(x_val, y_val, shuffle=False, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=None)
+        testgen = createAugment(x_test, y_test, shuffle=False, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=None)
+    elif args.dataset_path != 'cifar':
+        x_train = [load_image(f, os.path.join(args.dataset_path, 'train', f)) for f in os.listdir(os.path.join(args.dataset_path, 'train')) if f.endswith('.npy') or f.endswith('.jpg')]
+        x_val = [load_image(f, os.path.join(args.dataset_path, 'val', f)) for f in os.listdir(os.path.join(args.dataset_path, 'val')) if f.endswith('.npy') or f.endswith('.jpg')]
+        x_test = [load_image(f, os.path.join(args.dataset_path, 'test', f)) for f in os.listdir(os.path.join(args.dataset_path, 'test')) if f.endswith('.npy') or f.endswith('.jpg')]
 
         x_train = np.array(x_train).astype('uint8')
         x_val = np.array(x_val).astype('uint8')
         x_test = np.array(x_test).astype('uint8')
+
+        mask_type = "stroke"
+        if args.limited_view:
+            mask_type = "lv"
+        elif args.spatial_aliasing:
+            mask_type = "sa"
+
+        traingen = createAugment(x_train, x_train, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=mask_type)
+        valgen = createAugment(x_val, x_val, shuffle=False, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=mask_type)
+        testgen = createAugment(x_test, x_test, shuffle=False, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=mask_type)
+
     else:
        (x_train, y_train), (x_test, y_test) = keras.datasets.cifar10.load_data()
        args.image_channels = 3
@@ -258,27 +322,16 @@ if __name__ == '__main__':
 
     # this is just to test that PIL imported properly -- otherwise you won't find out until the end of an epoch
     Image.fromarray(np.squeeze(x_train[0]))
-
     print('x_train shape:', x_train.shape)
     print('x_val shape:', x_val.shape)
     print('x_test shape:', x_test.shape)
-    print(x_train.shape[0], 'train samples')
-    print(x_val.shape[0], 'val samples')
-    print(x_test.shape[0], 'test samples')
+    print(x_train.shape[0], 'x train samples')
+    print(x_val.shape[0], 'x val samples')
+    print(x_test.shape[0], 'x test samples')
 
-    mask_type = "stroke"
-    if args.limited_view:
-      mask_type = "lv"
-    elif args.spatial_aliasing:
-      mask_type = "sa"
-
-    ## Prepare training and testing mask-image pair generator
-    traingen = createAugment(x_train, x_train, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=mask_type)
-    valgen = createAugment(x_val, x_val, shuffle=False, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=mask_type)
-    testgen = createAugment(x_test, x_test, shuffle=False, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=mask_type)
 
     ## Save examples of what the masking looks like
-    sample_idx = 42 ## Change this to see different batches
+    sample_idx = 1 ## Change this to see different batches
     sample_masks, sample_labels = valgen[sample_idx]
     sample_images = [None]*(len(sample_masks)+len(sample_labels))
     sample_images[::2] = sample_labels
@@ -301,7 +354,6 @@ if __name__ == '__main__':
     keras.backend.clear_session()
     model = inpaintingModel().prepare_model(input_size=(args.image_size, args.image_size, args.image_channels))
     model.compile(optimizer='adam', loss='mean_absolute_error', metrics=[dice_coef])
-    # keras.utils.plot_model(model, show_shapes=True, dpi=76, to_file='model_v1.png')
 
     # lmk if you want to be added to a shared project: https://wandb.ai/mshao0/pat-inpainting/overview
     wandb.init(project="pat-inpainting", name=args.experiment_name, config=args)
@@ -314,8 +366,3 @@ if __name__ == '__main__':
             # use_multiprocessing=True,
             callbacks=[WandbCallback(),
                         PredictionLogger()])
-
-    ## Examples
-    # rows = 32
-    # sample_idx = 54
-    # sample_images, sample_labels = traingen[sample_idx]
