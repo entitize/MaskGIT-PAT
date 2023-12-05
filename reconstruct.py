@@ -8,6 +8,8 @@ from matplotlib import pyplot as plt
 import scipy
 import json
 import argparse
+import cv2
+from tqdm import tqdm
 
 def isInRange(theta, theta1, theta2):
   # This function computes the logical value of whether theta lies inside the
@@ -291,7 +293,8 @@ def forwardMatrixFullRingCDMMI(N_transducer, R_ring, px, py, M, N, dt, N_sample,
   filter[0:N_half_oversample] = half_filter
   filter[-N_half_oversample:] = np.flip(half_filter)
 
-  for r in range(0, N_transducer):
+  print("Building equations")
+  for r in tqdm(range(0, N_transducer)):
     A_over_sample = np.zeros([M, N, t_over_sample.shape[0]])
     for t in range(0, t_over_sample.shape[0]):
       [x_id, y_id, delta_theta] = deltaThetaCDMMI(xs, ys, px, py, transducer_x[r], transducer_y[r], t_over_sample[t] * V_sound)
@@ -305,7 +308,7 @@ def forwardMatrixFullRingCDMMI(N_transducer, R_ring, px, py, M, N, dt, N_sample,
     A_over_sample = A_over_sample * filter
     A_over_sample = ifft(A_over_sample, axis = -1).real
     A[:, :, [r], :] = A_over_sample[:, :, np.newaxis, oversample + padsample - 2:-padsample:2 * oversample]
-    print("Building equations number %d / %d transducers" %(r + 1, N_transducer))
+    # print("Building equations number %d / %d transducers" %(r + 1, N_transducer))
 
   A = A.reshape((M * N, N_transducer * t_sample.shape[0]))
   return (A, x_sample, y_sample, t_sample)
@@ -381,7 +384,7 @@ def proximalTV(I, Lambda, Iter):
     vy = acvy - lr * G_y
 
     vm = np.sqrt(vx**2 + vy**2)
-    pr = vm;
+    pr = vm
     pr[vm <= 1] = 1
     vx = vx / pr
     vy = vy / pr
@@ -398,11 +401,11 @@ def proximalTV(I, Lambda, Iter):
   TV = totalVariationImage(I)
   TV_p = totalVariationImage(I_p)
   Dis = np.sum((I_p - I) ** 2, axis=None)
-  print("----Dual problem objective: before is %f" %(L[0]))
-  print("----Dual problem objective: middle is %f" %(L[round(Iter/2)]))
-  print("----Dual problem objective: after is %f" %(L[-1]))
-  print("----Before proximal, ||I - I||2 + 2 lambda TV(I) is %f" %(2 * Lambda * TV))
-  print("----After proximal, ||I_p - I||2 + 2 lambda TV(I_p) is %f" %(Dis + 2 * Lambda * TV_p))
+  # print("----Dual problem objective: before is %f" %(L[0]))
+  # print("----Dual problem objective: middle is %f" %(L[round(Iter/2)]))
+  # print("----Dual problem objective: after is %f" %(L[-1]))
+  # print("----Before proximal, ||I - I||2 + 2 lambda TV(I) is %f" %(2 * Lambda * TV))
+  # print("----After proximal, ||I_p - I||2 + 2 lambda TV(I_p) is %f" %(Dis + 2 * Lambda * TV_p))
 
   return I_p
 
@@ -412,24 +415,25 @@ def reconImageFISTA(A, b, M, N, Lambda, L, Iter, Iter_sub):
   Loss = np.zeros(Iter)
   x = np.zeros(M * N)
   y = np.zeros(M * N)
-  for k in range(0, Iter):
-    print("==========FISTA iteration number %d / %d==========" %(k, Iter))
+  I = np.zeros((M, N))
+  for k in tqdm(range(0, Iter), desc="Recon Image FISTA"):
+    # print("==========FISTA iteration number %d / %d==========" %(k, Iter))
     T_pre = T
     x_pre = x
     # Compute x = x - 2 / L * AT(Ax - b)
     Res = np.sum((np.dot(A, y) - b) ** 2, axis=None)
-    print("Before gradient step the Residule is %f" %(Res))
+    # print("Before gradient step the Residule is %f" %(Res))
     y = y - (2 / L) * np.transpose(A) @ (A @ y - b)
     Res = np.sum((np.dot(A, y) - b) ** 2, axis=None)
-    print("After gradient step the Residule is %f" %(Res))
+    # print("After gradient step the Residule is %f" %(Res))
 
     # Compute x = TVdenoise(x)
     I = y.reshape(N, M)
     TV = totalVariationImage(I)
-    print("Before TV denoising TV is %f" %(TV))
+    # print("Before TV denoising TV is %f" %(TV))
     I = proximalTV(I, Lambda * 2 / L, Iter_sub)
     TV = totalVariationImage(I)
-    print("After TV denoising TV is %f" %(TV))
+    # print("After TV denoising TV is %f" %(TV))
     x = I.reshape(N * M)
 
     # Do FISTA acceleration
@@ -440,23 +444,25 @@ def reconImageFISTA(A, b, M, N, Lambda, L, Iter, Iter_sub):
     Res = np.sum((np.dot(A, x) - b) ** 2, axis=None)
     TV = totalVariationImage(I)
     Loss[k] = Res + 2 * Lambda * TV
-    print("The loss function is %f, Residule is %f, TV is %f" %(Loss[k], Res, TV))
+    # print("The loss function is %f, Residule is %f, TV is %f" %(Loss[k], Res, TV))
   return (I, Loss)
-
-
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Reconstruct")
    
+    parser.add_argument('--results-dir', type=str, help='Where to save the results', default='./results/reconstruct')
+    parser.add_argument('--signal-num', type=int, help='Specify a signal number. Otherwise, all signals will be used', default=360)
 
-    parser.add_argument('--r-ring', type=float, default=0.11, help='')
-    
+    parser.add_argument('--pat-dataset-dir', type=str, default='/central/groups/mlprojects/pat/PAT_dataset/', help='Directory of PAT dataset')
+    parser.add_argument('--inpainted-denorm-dir', type=str, default='/central/groups/mlprojects/pat/cnn_spatial_aliasing/inpainted_denorm/', help='Directory of inpainted signals')
 
-    parser.add_argument('--experiment-name', type=str, help='Name of experiment. This will be used to create a folder in results/ and checkpoints/')
-    parser.add_argument('--resume-exp', action="store_true", help='Name of experiment. This will be used to create a folder in results/ and checkpoints/')
+    parser.add_argument('--A-location', type=str, default="/groups/mlprojects/pat/A/A.pickle", help='Location of A matrix pickle')
+    parser.add_argument('--dpi', type=int, default=700, help='DPI of the saved images')
 
     args = parser.parse_args()
+
+    print("Will save results to: ", args.results_dir)
     
     # Fixed parameters
     R_ring      = 0.11
@@ -492,47 +498,32 @@ if __name__ == '__main__':
     T_min  = T_min_n * dt
     N_sample = T_max_n - T_min_n + 1
 
-    print("Start computing A")
-    if os.path.exists("./A.pickle"):
-        with open('./A.pickle', 'rb') as file:
+    if os.path.exists(args.A_location):
+        print("Found precomputed A")
+        with open(args.A_location, 'rb') as file:
             As = pickle.load(file)
         A, x_sample, y_sample, t_sample = As[0], As[1], As[2], As[3]
+        print("Loaded A")
     else:
+        print("Start computing A")
         (A, x_sample, y_sample, t_sample) = forwardMatrixFullRingCDMMI(N_transducer, R_ring, px, py, M, N, dt, N_sample, oversample, padsample, T_min, center_freq, fwhm, V_sound)
-        with open('./A.pickle', 'wb') as file:
+        with open(args.A_location, 'wb') as file:
             pickle.dump([A, x_sample, y_sample, t_sample], file)
 
-    print("Finished computing A")
+        print("Finished computing A")
 
-    #plt.figure(figsize = (30,30))
-    #plt.imshow(A.T)
-
-    # Compute the norm of the norm of the matrix for later use.
-    # Be aware that this may take very long time! But it only needs to be computed once
-    # Anorm = np.linalg.norm(A, ord = 2)
-    # print(f"Anorm = {Anorm}")
-
-    print("Load Image")
-    data = scipy.io.loadmat('/central/groups/mlprojects/pat/PAT_dataset/70/img.mat')
+    data = scipy.io.loadmat(f"{args.pat_dataset_dir}/{args.signal_num}/img.mat")
     I_gt = data['img']
 
     x_gt = I_gt.reshape(M * N)
     b = np.transpose(A)@x_gt
-    # b = awgn(b, 10)
-    print(f"Uncropped min: {b.min()}, max:{b.max()}")
-    fig = plt.figure()
-    plt.imshow((b.reshape((N_transducer, t_sample.shape[0])).T - globalMin) / (globalMax - globalMin))
-    plt.title("Uncropped")
-    fig.savefig("m_uncropped.png")
+
+    m_uncropped = (b.reshape((N_transducer, t_sample.shape[0])).T - globalMin) / (globalMax - globalMin)
 
     m = b.reshape((N_transducer, t_sample.shape[0]))
     m = m[cfg["left"]:cfg["left"]+imgSize, cfg["top"]: cfg["top"]+imgSize]
     m = m.reshape((imgSize * imgSize))
-    print(f"Cropped min: {m.min()}, max:{m.max()}")
-    fig = plt.figure()
-    plt.imshow((m.reshape((imgSize, imgSize)).T - globalMin) / (globalMax - globalMin))
-    plt.title("Cropped")
-    fig.savefig("m_cropped.png")
+    m_cropped = (m.reshape((imgSize, imgSize)).T - globalMin) / (globalMax - globalMin)
     
     A_crop = A.reshape((M, N, N_transducer, t_sample.shape[0]))
     A_crop = A_crop[:,:, cfg["left"]:cfg["left"]+imgSize, cfg["top"]: cfg["top"]+imgSize]
@@ -541,105 +532,89 @@ if __name__ == '__main__':
     m_check = np.transpose(A_crop)@x_gt
     assert (m == m_check).all(), "m should be the same"
     
-    # This is the ground truth of the image
-    # plt.figure()
-    # plt.imshow(I_gt)
+    S = b.reshape(N_transducer, t_sample.shape[0]).T
+    smallA = A.reshape((M, N, N_transducer, t_sample.shape[0]))
 
-    S = b.reshape(N_transducer, t_sample.shape[0]).T;
-    smallA = A.reshape((M, N, N_transducer, t_sample.shape[0]));
-
-    S_sa = np.zeros((t_sample.shape[0], N_transducer//4));
+    S_sa = np.zeros((t_sample.shape[0], N_transducer//4))
     S_sa[:, :] = S[:, ::4]
     S_sa = S_sa.T.reshape(N_transducer//4 * t_sample.shape[0])
     A_sa = np.zeros((M, N, N_transducer//4, t_sample.shape[0]))
     A_sa[:,:,:,:] = smallA[:,:,::4,:]
     A_sa = A_sa.reshape((M* N, N_transducer//4* t_sample.shape[0]))
 
-    S_lv = np.zeros((t_sample.shape[0], N_transducer-50));
+    S_lv = np.zeros((t_sample.shape[0], N_transducer-50))
     S_lv[:, :] = S[:, :50]
     S_lv = S_lv.T.reshape((N_transducer-50) * t_sample.shape[0])
     A_lv = np.zeros((M, N, N_transducer-50, t_sample.shape[0]))
     A_lv[:,:,:,:] = smallA[:,:,:50,:]
     A_lv = A_lv.reshape((M* N, (N_transducer-50)* t_sample.shape[0]))
 
-    # # This is the signal
-    # plt.figure()
-    # plt.imshow(S_sa)
-    # plt.axis('off')
-
-    # plt.figure()
-    # plt.imshow(S_lv)
-    # plt.axis('off')
-
-    masked = np.load('/central/groups/mlprojects/pat/cnn_spatial_aliasing/masked/signal_70.npy')
+    masked = np.load(f"{args.masked_dir}/signal_{args.signal_num}.npy")
     masked = np.squeeze(masked).T
-    S_masked = np.zeros((imgSize//3+1, imgSize));
-    S_masked[:, :] = masked[::3, :]
-    S_masked = S_masked.reshape((imgSize//3+1) * imgSize)
+    S_masked = np.zeros((imgSize//2, imgSize))
+    S_masked[:, :] = masked[::2, :]
+    S_masked = S_masked.reshape((imgSize//2) * imgSize)
     S_masked = S_masked * (globalMax - globalMin) + globalMin
-    print(f"S_masked min: {S_masked.min()}, max: {S_masked.max()}")
-    fig = plt.figure()
-    plt.imshow((S_masked.reshape((imgSize//3+1, imgSize)) - globalMin).T / (globalMax - globalMin))
-    plt.title("Cropped Masked")
-    fig.savefig("m_masked.png")
+
+    m_masked = (S_masked.reshape((imgSize//2, imgSize)).T - globalMin) / (globalMax - globalMin)
     
     smallA_crop = A_crop.reshape((M, N, imgSize, imgSize))
-    A_masked = np.zeros((M, N, imgSize//3+1, imgSize))
-    A_masked[:,:,:,:] = smallA_crop[:,:,::3,:]
-    A_masked = A_masked.reshape((M* N, (imgSize//3+1) * imgSize))    
+    A_masked = np.zeros((M, N, imgSize//2, imgSize))
+    A_masked[:,:,:,:] = smallA_crop[:,:,::2,:]
+    A_masked = A_masked.reshape((M* N, (imgSize//2) * imgSize))    
 
-    inpainted_denorm = np.load('/central/groups/mlprojects/pat/cnn_spatial_aliasing/inpainted_denorm/signal_70.npy')
+    inpainted_denorm = np.load(f"{args.inpainted_denorm_dir}/signal_{args.signal_num}.npy")
     inpainted_denorm = np.squeeze(inpainted_denorm).T.reshape((imgSize * imgSize))
     
-    inpainted_orig = np.load('/central/groups/mlprojects/pat/cnn_spatial_aliasing/inpainted_orig/signal_70.npy')
-    inpainted_orig = np.squeeze(inpainted_orig).T.reshape((imgSize * imgSize))
-    inpainted_orig = inpainted_orig * (globalMax - globalMin) + globalMin
-    assert (inpainted_denorm == inpainted_orig).all(), "Inpainted both should be the same"
-    print(f"Inpainted min: {inpainted_denorm.min()}, max: {inpainted_orig.max()}")
-    
+    m_inpainted = (inpainted_denorm.reshape((imgSize, imgSize)).T - globalMin) / (globalMax - globalMin)
+
+    ms = [("Uncropped", m_uncropped), ("Cropped", m_cropped), ("Cropped Masked", m_masked), ("Inpainted", m_inpainted)]
+
     Iter = 100
     Iter_sub = 1000
     Lambda = 0.0000001 # 0.000001
     Anorm = 0.02
+
+    # NOTE: Should we use this?
+    # Anorm = np.linalg.norm(A, ord = 2)
+    # print(f"Anorm = {Anorm}")
+
     L = 2 * Anorm * Anorm
 
+    scenarios = [
+      (A, b, "Uncropped"),
+      # (A_sa, S_sa, "Space Aliased"),
+      # (A_lv, S_lv, "Limited View"),
+      (A_crop, m, "Cropped"),
+      (A_masked, S_masked, "Cropped Masked"),
+      (A_crop, inpainted_denorm, "Inpainted")
+    ]
+
+    Is = []
+    for scenario in scenarios:
+      I = reconImageFISTA(np.transpose(scenario[0]), scenario[1], M, N, Lambda, L, Iter, Iter_sub)[0]
+
+      Is.append((scenario[2], I))
+    
+    # The top 4 are the ms in the order as ground truth, cropped, cropped masked, inpainted
+    # The bottom 4 are the Is in the same order.
+    num_cols = max(len(ms), len(Is))
+    num_rows = 2
     fig = plt.figure()
-    plt.imshow(I_gt)
-    plt.title("Ground Truth")
-    fig.savefig("I_gt.png")
-    
-    (I, Loss) = reconImageFISTA(np.transpose(A), b, M, N, Lambda, L, Iter, Iter_sub)
-    fig2 = plt.figure()
-    plt.imshow(I)
-    plt.title("Uncropped")
-    fig2.savefig("I_uncropped.png")
-    
-    (I, Loss) = reconImageFISTA(np.transpose(A_sa), S_sa, M, N, Lambda, L, Iter, Iter_sub)
-    fig3 = plt.figure()
-    plt.imshow(I)
-    plt.title("Space Aliased")
-    fig3.savefig("I_sa.png")
+    for i, (title, image) in enumerate(ms, start=1):
+      ax = fig.add_subplot(num_rows, num_cols, i)
+      ax.imshow(image)
+      ax.set_title(title, fontsize=10)
+    for i, (title, image) in enumerate(Is, start=5):
+      ax = fig.add_subplot(num_rows, num_cols, i)
+      ax.imshow(image)
+      # Get PSNR between image and the cropped ground truth
+      psnr = cv2.PSNR(image, Is[1][1], R=1)
+      if i == 6:
+        ax.set_title(title, fontsize=10)
+      else:
+        ax.set_title(f"{title} (PSNR: {psnr:.2f})", fontsize=10)
 
-    (I, Loss) = reconImageFISTA(np.transpose(A_lv), S_lv, M, N, Lambda, L, Iter, Iter_sub)
-    fig4 = plt.figure()
-    plt.imshow(I)
-    plt.title("Limited View")
-    fig4.savefig("I_lv.png")
-    
-    (I, Loss) = reconImageFISTA(np.transpose(A_crop), m, M, N, Lambda, L, Iter, Iter_sub)
-    fig5 = plt.figure()
-    plt.imshow(I)
-    plt.title("Cropped")
-    fig5.savefig("I_crop.png")
-
-    (I, Loss) = reconImageFISTA(np.transpose(A_masked), S_masked, M, N, Lambda, L, Iter, Iter_sub)
-    fig6 = plt.figure()
-    plt.imshow(I)
-    plt.title("Cropped Masked")
-    fig6.savefig("I_mask.png")
-    
-    (I, Loss) = reconImageFISTA(np.transpose(A_crop), inpainted_denorm, M, N, Lambda, L, Iter, Iter_sub)
-    fig7 = plt.figure()
-    plt.imshow(I)
-    plt.title("Inpainted")
-    fig7.savefig("I_inpainted.png")
+    os.makedirs(f"{args.results_dir}/m_and_I", exist_ok=True)
+    fig.set_size_inches(18.5, 10.5)
+    fig.savefig(f"{args.results_dir}/m_and_I/{args.signal_num}.png", dpi=args.dpi)

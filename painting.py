@@ -10,7 +10,7 @@ from torchvision import utils as vutils
 from tqdm import tqdm
 import math
 import matplotlib.pyplot as plt
-import wandb
+# import wandb
 import json
 
 class Painting:
@@ -114,7 +114,7 @@ class Painting:
         print("🎉🎉🎉")
 
 
-    def spatial_aliasing(self, num_transducers, filename="spatial_aliasing"):
+    def spatial_aliasing(self, num_transducers, filename="spatial_aliasing" ):
         dataset = load_data(self.args)
         dataset = iter(dataset)
         sample_image = next(dataset).to(device=self.args.device)
@@ -122,7 +122,7 @@ class Painting:
         mask_width = image_size/(num_transducers*2)
         mask_array = np.zeros((num_transducers, 4),dtype=int)
         for i in range(num_transducers):
-            mask_array[i]=[int((2*i+0.5)*mask_width),int((2*i+1.5)*mask_width),0,image_size]
+            mask_array[i]=[int((2*i+1)*mask_width),int((2*i+2)*mask_width),0,image_size]
         self.run_inpainting(dataset, mask_array, filename)
 
     def limited_view(self):
@@ -178,10 +178,10 @@ if __name__ == '__main__':
     args.num_inpainting_images = tmp_args.num_inpainting_images
     args.num_transducers = tmp_args.num_transducers
     
-    wandb.init(
-        project="pat_maskgit_inpainting",
-        config=json_args
-    )
+    # wandb.init(
+    #     project="pat_maskgit_inpainting",
+    #     config=json_args
+    # )
 
 
     # create the inpainting_results_dir if it doesn't exist

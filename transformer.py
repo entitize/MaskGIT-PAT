@@ -38,7 +38,10 @@ class VQGANTransformer(nn.Module):
     def load_vqgan(args):
         model = VQGAN(args)
         # model.load_checkpoint(args.checkpoint_path)
-        model.load_state_dict(torch.load(args.checkpoint_path)["vqgan"])        
+        if "vqgan" in torch.load(args.checkpoint_path):
+            model.load_state_dict(torch.load(args.checkpoint_path)["vqgan"])
+        else:
+            model.load_state_dict(torch.load(args.checkpoint_path))            
         model = model.eval()
         return model
 
@@ -68,11 +71,6 @@ class VQGANTransformer(nn.Module):
         mask = torch.zeros(z_indices.shape, dtype=torch.bool, device=z_indices.device)
         mask.scatter_(dim=1, index=sample, value=True)
 
-        # torch.rand(z_indices.shape, device=z_indices.device)
-        # mask = torch.bernoulli(r * torch.ones(z_indices.shape, device=z_indices.device))
-        # mask = torch.bernoulli(torch.rand(z_indices.shape, device=z_indices.device))
-        # mask = mask.round().to(dtype=torch.int64)
-        # masked_indices = torch.zeros_like(z_indices)
         masked_indices = self.mask_token_id * torch.ones_like(z_indices, device=z_indices.device)
         a_indices = mask * z_indices + (~mask) * masked_indices
 
@@ -257,12 +255,15 @@ class VQGANTransformer(nn.Module):
 
     @staticmethod
     def create_masked_image(image: torch.Tensor, mask_array):
-        mask = torch.ones_like(image, dtype=torch.int)
+        mask = torch.ones_like(image)
         for row in mask_array:
             x_min, x_max, y_min, y_max = row
             mask[:, :, y_min:y_max, x_min:x_max] = 0
         average_color = image.mean()
         masked_image = image * mask
+        if (image.shape[1] == 3):
+            average_color = image.mean(dim=(2, 3), keepdim=True)
+            masked_image = torch.where(masked_image == 0, average_color, masked_image)
         masked_image = torch.where(masked_image == 0, average_color, masked_image)
         return masked_image, mask
     
@@ -274,23 +275,19 @@ class VQGANTransformer(nn.Module):
         masked_image, mask = self.create_masked_image(x, mask_array)
 
         # encode to z_indices
+        q = H//p
         _, z_indices = self.encode_to_z(masked_image)
         _, original_z_indices = self.encode_to_z(x)
-        _, _, H, _ = x.shape
         z_indices = z_indices.reshape(z_indices.shape[0], p, p)
 
-        q = H//p
-        # Apply the mask to the tokens
-        mask_patches = mask.unfold(2, q, q).unfold(3, q, q)
-        mask_patches = mask_patches.contiguous().view(1, 1, p, p, -1)
-        mask_patches = mask_patches.float().mean(dim=-1)
-        mask_tokens = mask_patches.squeeze() 
-        mask_tokens = mask_tokens.unsqueeze(0).repeat(z_indices.shape[0], 1, 1) 
-        z_indices[mask_tokens < 0.7] = self.mask_token_id
+        mask_tokens = torch.nn.AvgPool2d(q)(mask)
+        z_indices[mask_tokens[0,0].unsqueeze(0) < 0.4] = self.mask_token_id
+     
         z_indices = z_indices.reshape(z_indices.shape[0], -1).to(torch.int64).to(self.args.device)
                                                 
         inpainted_indices = self.sample_good(z_indices)
         inpainted_image = self.indices_to_image(inpainted_indices)
+        inpainted_image = torch.where(x*mask == 0, inpainted_image, x)
 
 
         index_map = {
@@ -301,66 +298,4 @@ class VQGANTransformer(nn.Module):
 
         return index_map, masked_image, inpainted_image
 
-    def inpainting(self, image: torch.Tensor, x_start: int = 100, y_start: int = 100, size: int = 50, multi_mask=[]):
-        device = self.args.device
-        # Note: this function probably doesnt work yet lol
-        # apply mask on image
-        if len(multi_mask) > 0:
-            masked_image, mask = self.create_multi_masked_image(image, multi_mask)
-        else:
-            masked_image, mask = self.create_masked_image(image, x_start, y_start, size)
-
-        masked_image = masked_image.to(device=device)
-        mask = mask.to(device=device)
-
-        # encode masked image
-        _, indices = self.encode_to_z(masked_image)
-        mask = mask[:, 0, :, :]
-
-        # set masked patches to be 0 -> so that the sampling part only samples indices for these patches
-        # 1. idea: just calculate the ratio between 256x256 image and 16x16 latent image and set the area
-        #          which was masked in the original image to 0 in the encoded image
-        # 2. idea: check if patches which were masked in the original image are always the same in the latent space
-        #          If so: set these to 0
-        p = 16
-        patched_mask = mask.unfold(2, p, p).unfold(1, p, p)
-        patched_mask = torch.transpose(patched_mask, 3, 4)
-        patched_mask = patched_mask.permute(1, 2, 0, 3, 4)
-        patched_mask = patched_mask.contiguous().view(patched_mask.size(0) * patched_mask.size(1),
-                                                      -1)  # 256 x 256 i.e. 16x16 x 256
-
-        indices_mask, _ = torch.min(patched_mask, dim=-1)
-        indices = indices_mask * indices
-
-        # inpaint the image by using the sample method and provide the masked image indices and condition
-        sampled_indices = self.sample_good(indices)
-
-        # reconstruct inpainted image
-        inpainted_image = self.indices_to_image(sampled_indices)
-
-        # linearly blend the input image and inpainted image at border of mask (to avoid sharp edges at border of mask)
-        indices_mask = indices_mask.reshape(1, 1, 16, 16).type(torch.float)
-        upsampled_indices_mask = F.interpolate(indices_mask, scale_factor=16).squeeze(0)
-        intra = torch.where(mask != upsampled_indices_mask, 1, 0)
-
-        # define mask for blending
-        n = 128
-        base = torch.arange(n, device=device).view(1, -1).max(torch.arange(n, device=device).view(-1, 1))
-        right = torch.stack((torch.rot90(base, 1, [0, 1]), base)).reshape(n * 2, n)
-        left = torch.stack((torch.rot90(base, 2, [0, 1]), torch.rot90(base, 3, [0, 1]))).reshape(n * 2, n)
-        full = torch.cat((left, right), 1)
-
-        # construct opacity matrix for intra region
-        min_blend = torch.min(torch.where(intra == 1, full, torch.tensor(1000000, device=device)))
-        max_blend = torch.max(torch.where(intra == 1, full, torch.tensor(-1000000, device=device)))
-        mask_blend = torch.where(intra == 1, (full - min_blend) / max_blend, torch.ones_like(intra, dtype=torch.float))
-
-        mask_real = torch.where(mask == 0, mask.type(torch.float), mask_blend)
-        mask_fake = torch.where(mask == 0, (1 - mask).type(torch.float), mask_blend)
-
-        blended_image = mask_real * image + mask_fake * inpainted_image
-
-        no_blend_image = mask * image + (1 - mask) * inpainted_image
-
-        return blended_image, inpainted_image, no_blend_image
 
