@@ -77,6 +77,12 @@ class createAugment(keras.utils.Sequence):
         mask = np.full((self.dim[0],self.dim[1],self.n_channels), 0, np.uint8)
         thickness = np.random.randint(2, 5)
         mask[:, ::thickness, :]= 255
+    elif self.mask_type == "mg":
+        pattern = np.array([255,255,255,255, 0, 0, 0, 0], dtype=np.uint8)
+        area = self.dim[0] * self.dim[1]
+        mask = np.tile(pattern, (area) // len(pattern) + 1)[:area]
+        mask = np.reshape(mask, (self.dim[0], self.dim[1], 1))
+        mask = np.tile(mask, self.n_channels)
     else:
       # random "brush" strokes masking
       mask = np.full((self.dim[0],self.dim[1],self.n_channels), 255, np.uint8)
@@ -126,7 +132,7 @@ if __name__ == '__main__':
 
     group.add_argument('--limited-view', action='store_true', help='This will use a square mask instead of random stroke masks')
     group.add_argument('--spatial-aliasing', action='store_true', help='This will mimic spatial aliasing instead of random stroke masks')
-
+    group.add_argument('--maskgit-spatial-aliasing', action='store_true', help='This will mimic spatial aliasing used in maskgit (4 pixel wide columns)')
 
     args = parser.parse_args()
 
@@ -161,6 +167,8 @@ if __name__ == '__main__':
       mask_type = "lv"
     elif args.spatial_aliasing:
       mask_type = "sa"
+    elif args.maskgit_spatial_aliasing:
+      mask_type = "mg"
 
     ## Prepare training and testing mask-image pair generator
     # traingen = createAugment(x_train, x_train, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=mask_type)

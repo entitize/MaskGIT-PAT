@@ -25,10 +25,12 @@ cd ~/MaskGIT-PAT
 # NOTE(@kai): the training_vqgan script already uses cuda by default
 
 python load_and_predict_cnn.py \
-    --result_directory /groups/mlprojects/pat/cnn_spatial_aliasing \
+    --result_directory /groups/mlprojects/pat/cnn_limited_view_onethird \
     --dataset-path /groups/mlprojects/pat/pat_norm_crop \
     --image-channels 1 \
     --image-size 64 \
-    --model-path wandb/latest-run/files/model-best.h5 \
-    --spatial-aliasing
+    --model-path wandb/run-20231120_222532-ixbhzc58/files/model-best.h5 \
+    --limited-view
+
+    # --model-path wandb/latest-run/files/model-best.h5 \
     # --experiment-name cnn_inpainting_check_versions \
