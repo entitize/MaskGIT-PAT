@@ -68,7 +68,7 @@ class createAugment(keras.utils.Sequence):
     if self.mask_type == "lv":
       # limited view masking - rectangle 1/3 the width of the image, centered in the middle
       mask = np.full((self.dim[0],self.dim[1],self.n_channels), 255, np.uint8)
-      w = self.dim[0] // 3
+      w = self.dim[0] // 2
       x = self.dim[0] // 2
       cv2.line(mask,(x,0),(x,self.dim[1]),(1,1,1),w)
     elif self.mask_type == "sa":
