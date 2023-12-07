@@ -1,5 +1,7 @@
 # MaskGIT-PAT
 
+Fan-Lin Wang, Madeline Shao, Nika Chuzhoy, Kai Nakamura
+
 We apply MaskGIT to photoacoustic tomography (PAT) to resolve spatial-aliasing and limited view
 The code in this repo is based on [MaskGIT-pytorch](https://github.com/dome272/MaskGIT-pytorch).
 
