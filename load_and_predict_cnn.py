@@ -148,8 +148,6 @@ if __name__ == '__main__':
 
     print(tf.__version__)
 
-    # x_train = [(np.load(os.path.join(args.dataset_path, 'train', f)) * 255) for f in os.listdir(os.path.join(args.dataset_path, 'train')) if f.endswith('.npy')]
-    # x_val = [(np.load(os.path.join(args.dataset_path, 'val', f)) * 255) for f in os.listdir(os.path.join(args.dataset_path, 'val')) if f.endswith('.npy')]
     x_test = [] # image arrays
     file_names = [] # file names
     print("Loading data...")
@@ -165,13 +163,11 @@ if __name__ == '__main__':
 
     x_test = np.asarray(x_test, dtype=object).astype(np.uint8)
     print(x_test.shape)
-    # x_test = [(np.load(os.path.join(args.dataset_path, 'test', f)) * 255) for f in os.listdir(os.path.join(args.dataset_path, 'test')) if f.endswith('.npy')]
 
     # Load config -- for denormalization
     config_path = os.path.join(args.dataset_path, 'config.json')
     config = None
     if (os.path.isfile(config_path)):
-      print("????")
       json_file = open(config_path)
       config = json.load(json_file)
       json_file.close()
@@ -185,8 +181,6 @@ if __name__ == '__main__':
       mask_type = "mg"
 
     ## Prepare training and testing mask-image pair generator
-    # traingen = createAugment(x_train, x_train, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=mask_type)
-    # valgen = createAugment(x_val, x_val, shuffle=False, dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=mask_type)
     testgen = createAugment(dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=mask_type)
 
     model = load_model(args.model_path, custom_objects={'dice_coef': dice_coef})
