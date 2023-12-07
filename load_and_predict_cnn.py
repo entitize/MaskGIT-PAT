@@ -25,6 +25,8 @@ from sklearn.model_selection import train_test_split
 import json
 from tqdm import tqdm
 from PIL import Image, ImageDraw, ImageFont
+import utils
+import torch
 # NOTE: 'module load gcc/9.2.0' is necessary for PIL to work
 
 # import matplotlib.pyplot as plt
@@ -115,14 +117,12 @@ def predict_and_save(generator, image, model, dir, file_name, config):
       # normalization done thru (cropped_image_array - global_min) / (global_max - global_min)
       denorm_image = inpainted_image * (global_max - global_min) + global_min
       np.save(os.path.join(dir, 'inpainted_denorm', file_name), denorm_image)
+
     else:
-      if np.max(inpainted_image) <= 1.0:
-        inpainted_image = (1-inpainted_image) * 255
-        masked_image = (1-masked_image) * 255
-      inpainted_pil = Image.fromarray(np.uint8(inpainted_image)).convert('RGB')
-      masked_pil = Image.fromarray(np.uint8(masked_image)).convert('RGB')
-      inpainted_pil.save(os.path.join(dir, 'inpainted_orig',  os.path.splitext(file_name)[0] + '.png'))
-      masked_pil.save(os.path.join(dir, 'masked',  os.path.splitext(file_name)[0] + '.png'))
+      image = torch.from_numpy(np.transpose(image, (2,0,1)))
+      masked_image = torch.from_numpy(1-np.transpose(masked_image, (2,0,1)))
+      inpainted_image = torch.from_numpy(1-np.transpose(inpainted_image, (2,0,1)))
+      utils.display_results(None, image, masked_image, inpainted_image, os.path.join(dir,  os.path.splitext(file_name)[0] + '.png'))
 
 
 # # Testing on images
@@ -162,7 +162,6 @@ if __name__ == '__main__':
             file_names.append(f)
 
     x_test = np.asarray(x_test, dtype=object).astype(np.uint8)
-    print(x_test.shape)
 
     # Load config -- for denormalization
     config_path = os.path.join(args.dataset_path, 'config.json')

@@ -3,13 +3,12 @@ import torch
 import numpy as np
 import os
 import argparse
-from torchvision import transforms
 from PIL import Image, ImageDraw, ImageFont
 from utils import load_data, plot_images
-from torchvision import utils as vutils
 from tqdm import tqdm
 import math
 import matplotlib.pyplot as plt
+import utils
 # import wandb
 import json
 
@@ -70,46 +69,13 @@ class Painting:
             masked_image_squeezed = masked_image.squeeze(0)
             inpainted_image_squeezed = inpainted_image.squeeze(0)
 
-            def add_center_highlight(image, border_size=1, border_color=1.0):
-                # Assuming image is a single-channel grayscale image with shape [1, Height, Width]
-
-                # Create a copy of the image to draw the border
-                bordered_image = image.clone()
-
-                # Draw border
-                for row in mask_array:
-                    x_min, x_max, y_min, y_max = row
-                    bordered_image[:, y_max-border_size:y_max, x_min:x_max] = border_color
-                    bordered_image[:, y_min:y_min+border_size, x_min:x_max] = border_color
-                    bordered_image[:, y_min:y_max, x_min:x_min+border_size] = border_color
-                    bordered_image[:, y_min:y_max, x_max-border_size:x_max] = border_color
-                    
-                return bordered_image
+            if (sample_image_squeezed.shape[0] == 1):
+                np.save(os.path.join(full_path, f"{filename}_original.npy"), sample_image_squeezed.clone().cpu().numpy())
+                np.save(os.path.join(full_path, f"{filename}_masked.npy"), masked_image_squeezed.clone().cpu().numpy())
+                np.save(os.path.join(full_path, f"{filename}_inpainted.npy"), inpainted_image_squeezed.clone().cpu().numpy())
             
-            def normalize_image(image):
-                # Normalize from [-1, 1] to [0, 1]
-                return (image + 1) / 2
-
-            np.save(os.path.join(full_path, f"{filename}_original.npy"), sample_image_squeezed.clone().cpu().numpy())
-            np.save(os.path.join(full_path, f"{filename}_masked.npy"), masked_image_squeezed.clone().cpu().numpy())
-            np.save(os.path.join(full_path, f"{filename}_inpainted.npy"), inpainted_image_squeezed.clone().cpu().numpy())
-
-            sample_image_highlighted = normalize_image(add_center_highlight(sample_image_squeezed))
-            masked_image_highlighted = normalize_image(add_center_highlight(masked_image_squeezed))
-            inpainted_image_highlighted = normalize_image(add_center_highlight(inpainted_image_squeezed))
-
-            images = [sample_image_highlighted, masked_image_highlighted, inpainted_image_highlighted]
-            padding = 10
-            grid = vutils.make_grid(images, nrow=3, padding=padding)
-            grid_pil = transforms.ToPILImage()(grid)
-            draw = ImageDraw.Draw(grid_pil)
-            font = ImageFont.load_default()
-            titles = ["Original", "Masked", "Inpainted"]
-            for i, title in enumerate(titles):
-                x = i * (sample_image.shape[-1] + padding) + padding
-                y = 0
-                draw.text((x, y), title, (255, 255, 255), font=font) 
-            grid_pil.save(os.path.join(full_path, f"{filename}.png"))
+            result_path = os.path.join(full_path, f"{filename}.png")
+            utils.display_results(mask_array, sample_image, masked_image, inpainted_image, result_path)
 
         print(f"Saved inpainting results to {self.args.inpainting_results_dir}")
 
@@ -201,7 +167,3 @@ if __name__ == '__main__':
     painting = Painting(args)
     painting.spatial_aliasing(args.num_transducers)
     painting.limited_view()
-
-
-
-
