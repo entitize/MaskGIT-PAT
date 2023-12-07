@@ -3,7 +3,7 @@
 #Submit this script with: sbatch thefilename
 #SBATCH -A mlprojects
 
-#SBATCH --time=1:00:00  # walltime, timeout (if script runs longer than specified, it will timeout). Setting it higher results in lower priority on HPC
+#SBATCH --time=0:10:00  # walltime, timeout (if script runs longer than specified, it will timeout). Setting it higher results in lower priority on HPC
 #SBATCH --ntasks=1   # number of processor cores (i.e. tasks)
 #SBATCH --nodes=1   # number of nodes
 #SBATCH --mem-per-cpu=5G # memory per CPU core
@@ -29,7 +29,7 @@ python load_and_predict_cnn.py \
     --dataset-path /groups/mlprojects/pat/pat_norm_crop \
     --image-channels 1 \
     --image-size 64 \
-    --model-path wandb/run-20231120_222532-ixbhzc58/files/model-best.h5 \
+    --model-path /home/mshao/MaskGIT-PAT/wandb/run-20231120_222532-ixbhzc58/files/model-best.h5 \
     --limited-view
 
     # --model-path wandb/latest-run/files/model-best.h5 \

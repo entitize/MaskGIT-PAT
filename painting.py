@@ -18,6 +18,8 @@ class Painting:
     def __init__(self, args):
         self.args = args
         self.model = VQGANTransformer(args).to(device=args.device)
+        # get number of parameters in class VQGANTransformer(nn.Module):
+        print(f"Number of parameters in model: {sum(p.numel() for p in self.model.parameters())}")
         self.model.load_state_dict(torch.load(args.transformer_checkpoint_path))
     
     def normalize_image(self, x):
