@@ -4,7 +4,7 @@ We apply MaskGIT to photoacoustic tomography (PAT) to resolve spatial-aliasing a
 The code in this repo is based on [MaskGIT-pytorch](https://github.com/dome272/MaskGIT-pytorch).
 
 
-To view results, run the [demo notebook](https://colab.research.google.com/drive/1s-8efofieqWDSrxb70S1mk0PVR4etLC4?usp=sharing).
+To view results, run the [demo notebook](https://colab.research.google.com/drive/1TOHQe0SCLcD1qOGAec4fjBJu77YpREAo?usp=sharing).
 
 Commands to run to setup on Caltech HPC
 ```
