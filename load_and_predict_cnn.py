@@ -176,6 +176,9 @@ if __name__ == '__main__':
     testgen = createAugment(dim=(args.image_size, args.image_size), n_channels=args.image_channels, mask_type=mask_type)
 
     model = load_model(args.model_path, custom_objects={'dice_coef': dice_coef})
+    # print number of parameters
+    print(model.summary())
+    print(model.count_params())
 
     os.makedirs(os.path.join(args.result_directory, 'inpainted_orig'), exist_ok=True)
     os.makedirs(os.path.join(args.result_directory, 'inpainted_denorm'), exist_ok=True)
