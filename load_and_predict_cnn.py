@@ -24,6 +24,7 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 import json
 from tqdm import tqdm
+from PIL import Image, ImageDraw, ImageFont
 # NOTE: 'module load gcc/9.2.0' is necessary for PIL to work
 
 # import matplotlib.pyplot as plt
@@ -105,14 +106,23 @@ def predict_and_save(generator, image, model, dir, file_name, config):
     inpainted_image = model.predict(np.expand_dims(masked_image, axis=0))
     inpainted_image = inpainted_image.reshape(inpainted_image.shape[1:])
 
-    np.save(os.path.join(dir, 'inpainted_orig', file_name), inpainted_image)
-    np.save(os.path.join(dir, 'masked', file_name), masked_image)
 
-    global_min = config['min']
-    global_max = config['max']
-    # normalization done thru (cropped_image_array - global_min) / (global_max - global_min)
-    denorm_image = inpainted_image * (global_max - global_min) + global_min
-    np.save(os.path.join(dir, 'inpainted_denorm', file_name), denorm_image)
+    if (config):
+      np.save(os.path.join(dir, 'inpainted_orig', file_name), inpainted_image)
+      np.save(os.path.join(dir, 'masked', file_name), masked_image)
+      global_min = config['min']
+      global_max = config['max']
+      # normalization done thru (cropped_image_array - global_min) / (global_max - global_min)
+      denorm_image = inpainted_image * (global_max - global_min) + global_min
+      np.save(os.path.join(dir, 'inpainted_denorm', file_name), denorm_image)
+    else:
+      if np.max(inpainted_image) <= 1.0:
+        inpainted_image = (1-inpainted_image) * 255
+        masked_image = (1-masked_image) * 255
+      inpainted_pil = Image.fromarray(np.uint8(inpainted_image)).convert('RGB')
+      masked_pil = Image.fromarray(np.uint8(masked_image)).convert('RGB')
+      inpainted_pil.save(os.path.join(dir, 'inpainted_orig',  os.path.splitext(file_name)[0] + '.png'))
+      masked_pil.save(os.path.join(dir, 'masked',  os.path.splitext(file_name)[0] + '.png'))
 
 
 # # Testing on images
@@ -147,20 +157,24 @@ if __name__ == '__main__':
         if f.endswith('.npy'):
             x_test.append(np.load(os.path.join(args.dataset_path, 'test', f)) * 255)
             file_names.append(f)
+        elif f.endswith('.jpg'):
+            img = Image.open(os.path.join(args.dataset_path, 'test', f)).resize((256, 256))
+            img_array = np.asarray(img) * 255
+            x_test.append(img_array)
+            file_names.append(f)
+
+    x_test = np.asarray(x_test, dtype=object).astype(np.uint8)
+    print(x_test.shape)
     # x_test = [(np.load(os.path.join(args.dataset_path, 'test', f)) * 255) for f in os.listdir(os.path.join(args.dataset_path, 'test')) if f.endswith('.npy')]
-    x_test = np.array(x_test).astype('uint8')
 
     # Load config -- for denormalization
-    json_file = open(os.path.join(args.dataset_path, 'config.json'))
-    config = json.load(json_file)
-    json_file.close()
-
-    # print('x_train shape:', x_train.shape)
-    # print('x_val shape:', x_val.shape)
-    print('x_test shape:', x_test.shape)
-    # print(x_train.shape[0], 'train samples')
-    # print(x_val.shape[0], 'val samples')
-    print(x_test.shape[0], 'test samples')
+    config_path = os.path.join(args.dataset_path, 'config.json')
+    config = None
+    if (os.path.isfile(config_path)):
+      print("????")
+      json_file = open(config_path)
+      config = json.load(json_file)
+      json_file.close()
 
     mask_type = "stroke"
     if args.limited_view:

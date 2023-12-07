@@ -125,9 +125,17 @@ class Painting:
             mask_array[i]=[int((2*i+1)*mask_width),int((2*i+2)*mask_width),0,image_size]
         self.run_inpainting(dataset, mask_array, filename)
 
-    def limited_view(self):
-        self.spatial_aliasing(1, "limited_view")
 
+    def limited_view(self, filename="limited_view"):
+        dataset = load_data(self.args)
+        dataset = iter(dataset)
+        sample_image = next(dataset).to(device=self.args.device)
+        image_size = sample_image.shape[-1]
+        mask_width = image_size/2
+        mask_array = np.zeros((2, 4),dtype=int)
+        for i in range(2):
+            mask_array[i]=[int((2*i+0.5)*mask_width),int((2*i+1.5)*mask_width),0,image_size]
+        self.run_inpainting(dataset, mask_array, filename)
 
 
 def checkpoint_path_to_config_path(path):
