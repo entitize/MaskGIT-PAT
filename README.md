@@ -1,7 +1,10 @@
 # MaskGIT-PAT
 
 We apply MaskGIT to photoacoustic tomography (PAT) to resolve spatial-aliasing and limited view
-The code in this repo is based on [MaskGIT-pytorch](https://github.com/dome272/MaskGIT-pytorch)
+The code in this repo is based on [MaskGIT-pytorch](https://github.com/dome272/MaskGIT-pytorch).
+
+
+To view results, run the [demo notebook](https://colab.research.google.com/drive/1s-8efofieqWDSrxb70S1mk0PVR4etLC4?usp=sharing).
 
 Commands to run to setup on Caltech HPC
 ```
@@ -93,12 +96,4 @@ The code is ready for training both the VQGAN and the Bidirectional Transformer 
 ```python training_transformer.py```
 
 (Make sure to edit the path for the dataset etc.)
-
-## TODO
-- [x] Implement the gamma functions
-- [ ] Implement functions for image editing tasks: inpainting, extrapolation, image manipulation
-  - started working on inpainting function. [transformer.py](https://github.com/dome272/MaskGIT-pytorch/blob/main/transformer.py#L152)
-- [ ] Tune hyperparameters
-- [x] Provide visual results
-- [ ] Pre-Norm instead of Post-Norm
 
